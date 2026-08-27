@@ -42,6 +42,13 @@
   // corrupt the payload, so it is skipped rather than silently clobbered.
   var RESERVED = { action: true, at: true, playing: true };
 
+  // Who drives the stroke axis.
+  //   auto   - the Handy when one is configured, this plugin otherwise
+  //   router - always this plugin, on the same clock as every other axis; the
+  //            Handy is not used at all
+  //   handy  - always the Handy; nobody plays it if no key is configured
+  var STROKE_MODES = { auto: true, router: true, handy: true };
+
   function canonicalAxis(key) {
     return AXIS_ALIASES[String(key).toLowerCase()] || null;
   }
@@ -509,7 +516,14 @@
       };
     }
 
+    var strokeAxis = String(raw.strokeAxis || "").trim().toLowerCase() || "auto";
+    if (!STROKE_MODES[strokeAxis]) {
+      console.warn(LOG, 'unknown strokeAxis "' + strokeAxis + '", falling back to "auto"');
+      strokeAxis = "auto";
+    }
+
     return {
+      strokeAxis: strokeAxis,
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
       xtoysAction: String(raw.xtoysAction || "").trim() || "funscript",
       only: only,
@@ -531,12 +545,24 @@
     var iface = (opts.stashConfig && opts.stashConfig.interface) || {};
     var hasHandy = !!String(iface.handyKey || "").trim();
 
-    var handy =
-      hasHandy && opts.defaultClientProvider
-        ? opts.defaultClientProvider(opts)
-        : null;
+    // "router" deliberately declines the Handy even when one is configured: the
+    // Handy plays its uploaded script off *server* time while everything else is
+    // ticked from the browser clock, so the only way to keep the axes in phase
+    // is for one clock to drive all of them.
+    var useHandy = cfg.strokeAxis === "router" ? false : hasHandy;
 
-    cfg.routeStroke = !handy;
+    var handy =
+      useHandy && opts.defaultClientProvider ? opts.defaultClientProvider(opts) : null;
+
+    cfg.routeStroke =
+      cfg.strokeAxis === "router" || (cfg.strokeAxis === "auto" && !handy);
+
+    if (cfg.strokeAxis === "router" && hasHandy) {
+      console.warn(
+        LOG,
+        'strokeAxis is "router", so the configured Handy will not be used at all.'
+      );
+    }
 
     if (!cfg.xtoysWebhookId) {
       console.warn(
@@ -551,7 +577,9 @@
       "installed;",
       handy
         ? "stroke axis delegated to the Handy"
-        : "running without a Handy, stroke axis routed too",
+        : cfg.routeStroke
+          ? "stroke axis routed through this plugin (single clock)"
+          : "stroke axis not played",
       "| axes:",
       cfg.only ? cfg.only.raw.join(", ") : "all",
       "| " + cfg.updateHz + "Hz"

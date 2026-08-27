@@ -68,12 +68,35 @@ they would collide with the message format.
 
 | Setting | Default | Notes |
 |---|---|---|
+| Stroke Axis Owner | `auto` | `auto`, `router` or `handy` — see below. |
 | XToys Webhook ID | — | Blank disables routing entirely. |
 | XToys Action Name | `funscript` | The `action` field value. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |
 | Deadband | `2` | Skip sending while nothing moved this far (0–100). |
 | Axis Offset (ms) | interface offset | Falls back to Settings > Interface > Funscript Offset. |
+
+## Who drives the stroke axis
+
+The **Stroke Axis Owner** setting decides this, because the two candidates do not
+share a clock.
+
+| Value | Behaviour |
+|---|---|
+| `auto` *(default)* | The Handy plays it when a Handy key is configured; this plugin routes it otherwise. |
+| `router` | This plugin always routes it, on the same clock as every other axis. The Handy is **not used at all**, even if configured. |
+| `handy` | Always left to the Handy. If no key is configured, nothing plays it. |
+
+`auto` is the best of both when you have a Handy: it plays the stroke axis off
+its own uploaded script, synced against the Handy's *server* time, which is more
+accurate than anything a browser can do. The catch is that every other axis is
+ticked from the *browser* clock, so the two can drift apart over a long scene.
+
+`router` trades that accuracy for phase coherence — one clock drives everything,
+so the axes stay aligned with each other even though none of them get the Handy's
+server sync. Choose it if you notice the stroke axis sliding out of phase with
+the rest; it's the right setting for coordinated multi-axis hardware such as an
+OSR2 or SR6 driven through XToys.
 
 ## Script formats
 
@@ -92,11 +115,10 @@ be embedded in the one file.
 
 ## Caveats
 
-- **Clock drift.** The Handy plays the stroke axis autonomously off its uploaded
-  script using *server* time sync, while the other axes are ticked from the
-  *browser* clock. Expect some relative drift. Fine for vibes; visible if you
-  want tightly coordinated SR6-style motion — the fix then is to stop delegating
-  the stroke axis and drive every axis from the one ticker.
+- **Clock drift.** With the default `auto` setting the Handy plays the stroke
+  axis off *server* time while the other axes are ticked from the *browser*
+  clock, so the two can drift apart. Set Stroke Axis Owner to `router` to put
+  every axis on one clock — see above.
 - **Latency.** XToys webhooks are a cloud round-trip. Good enough for auxiliary
   motion, not good enough to have been worth using for the stroke axis.
 - Scenes need a `.funscript` next to the video (stash's `interactive` flag), or

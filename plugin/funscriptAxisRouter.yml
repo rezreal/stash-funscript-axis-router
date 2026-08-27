@@ -14,6 +14,15 @@ ui:
       - wss://webhook.xtoys.app
 
 settings:
+  strokeAxis:
+    displayName: Stroke Axis Owner
+    description: >-
+      Who drives the stroke axis. "auto" (default) leaves it to the Handy when a
+      Handy key is configured, and routes it through this plugin otherwise.
+      "router" always routes it through this plugin on the same clock as every
+      other axis and does not use the Handy at all - use this if the Handy and
+      the other axes drift apart. "handy" always leaves it to the Handy.
+    type: STRING
   xtoysWebhookId:
     displayName: XToys Webhook ID
     description: >-

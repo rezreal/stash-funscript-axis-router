@@ -35,15 +35,16 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
 
+  const handyBuilt = { n: 0 };
   const iface = Object.assign({}, ifaceSettings || {});
   if (handy) iface.handyKey = "REALKEY";
   const opts = {
     handyKey: "", scriptOffset: 0,
-    defaultClientProvider: handy ? (() => handy) : undefined,
+    defaultClientProvider: handy ? (() => { handyBuilt.n++; return handy; }) : undefined,
     stashConfig: { interface: iface, plugins: { funscriptAxisRouter: pluginSettings || {} } },
   };
   const client = InteractiveUtils.interactiveClientProvider(opts);
-  return { client, sent, player, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
+  return { client, sent, player, handyBuilt, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
 }
 
 const V2 = {
@@ -314,6 +315,66 @@ console.log("\nstroke withheld when a Handy owns it");
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("stroke excluded, aux still routed", Object.keys(m).sort(), ["action","at","pitch","playing","roll"]);
+}
+
+
+// ---- 16. stroke axis ownership ------------------------------------------
+console.log("\nstroke axis owner");
+{
+  const mkHandy = () => ({ handyKey: "REALKEY", connected: true, playing: false,
+    connect: () => Promise.resolve(), sync: () => Promise.resolve(0), configure: () => Promise.resolve(),
+    uploadScript: () => Promise.resolve(), play: () => Promise.resolve(), pause: () => Promise.resolve(),
+    ensurePlaying: () => Promise.resolve(), setLooping: () => Promise.resolve() });
+
+  // router: must decline the Handy outright, not merely ignore its output
+  const r = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "router" }, {}, mkHandy());
+  await r.client.uploadScript("u"); await r.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  r.player.t = 0.5; r.tick();
+  eq("router: Handy never constructed", r.handyBuilt.n, 0);
+  eq("router: stroke routed alongside aux", Object.keys(r.sent[r.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll","stroke"]);
+  eq("router: sentinel key so the pipeline runs", r.client.handyKey, "funscriptAxisRouter");
+
+  // handy: always delegated, stroke withheld
+  const h = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "handy" }, {}, mkHandy());
+  await h.client.uploadScript("u"); await h.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  h.player.t = 0.5; h.tick();
+  eq("handy: Handy constructed", h.handyBuilt.n, 1);
+  eq("handy: stroke withheld", Object.keys(h.sent[h.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll"]);
+
+  // handy with no key: nobody plays stroke
+  const hn = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "handy" });
+  await hn.client.uploadScript("u"); await hn.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  hn.player.t = 0.5; hn.tick();
+  eq("handy+no key: stroke still withheld", Object.keys(hn.sent[hn.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll"]);
+
+  // auto still behaves exactly as before
+  const a1 = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "auto" }, {}, mkHandy());
+  await a1.client.uploadScript("u"); await a1.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  a1.player.t = 0.5; a1.tick();
+  eq("auto+handy: stroke withheld", Object.keys(a1.sent[a1.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll"]);
+
+  const a2 = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0 });
+  await a2.client.uploadScript("u"); await a2.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  a2.player.t = 0.5; a2.tick();
+  eq("auto+no handy (default): stroke routed", Object.keys(a2.sent[a2.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll","stroke"]);
+
+  // garbage falls back to auto rather than breaking
+  const bad = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "nonsense" }, {}, mkHandy());
+  await bad.client.uploadScript("u"); await bad.client.play(0);
+  await new Promise(x => setTimeout(x, 5));
+  bad.player.t = 0.5; bad.tick();
+  eq("invalid value falls back to auto", Object.keys(bad.sent[bad.sent.length-1]).sort(),
+     ["action","at","pitch","playing","roll"]);
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");
