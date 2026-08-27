@@ -1,0 +1,53 @@
+name: Funscript Axis Router
+description: >-
+  Routes the auxiliary axes of a multi-axis funscript (roll, pitch, surge, ...)
+  to an XToys webhook, while the built-in Handy client keeps playing the main
+  stroke axis untouched.
+version: 0.1.0
+url: https://github.com/stashapp/stash
+
+ui:
+  javascript:
+    - funscriptAxisRouter.js
+  csp:
+    connect-src:
+      - wss://webhook.xtoys.app
+
+settings:
+  xtoysWebhookId:
+    displayName: XToys Webhook ID
+    description: >-
+      The webhook ID shown by the Webhook block in your XToys script. Connects
+      to wss://webhook.xtoys.app/<id>. Leave blank to disable routing.
+    type: STRING
+  xtoysAction:
+    displayName: XToys Action Name
+    description: >-
+      Value sent as the "action" field, used by the XToys webhook block to match
+      the event. Defaults to "funscript".
+    type: STRING
+  axes:
+    displayName: Axes To Route
+    description: >-
+      Comma-separated axes to forward, e.g. "roll, pitch" or "R1, R2". Leave
+      blank to forward every auxiliary axis found in the script. The stroke axis
+      (L0) is never forwarded - the Handy plays it.
+    type: STRING
+  updateHz:
+    displayName: Update Rate (Hz)
+    description: >-
+      How often to sample the script and send to XToys. Default 10. Keep this at
+      or below the Max Message Frequency configured on the XToys side.
+    type: NUMBER
+  deadband:
+    displayName: Deadband
+    description: >-
+      Skip sending while every axis has moved less than this much (0-100 scale).
+      Default 2. Set to 0 to send on every tick.
+    type: NUMBER
+  offsetMs:
+    displayName: Axis Offset (ms)
+    description: >-
+      Timing offset applied to the auxiliary axes only. Defaults to the global
+      Funscript Offset from Settings > Interface.
+    type: NUMBER
