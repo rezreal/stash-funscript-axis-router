@@ -106,9 +106,16 @@ node test/test.mjs   # runs the plugin against a stubbed browser, no deps
 
 `build.sh` emits a stash *package source*: a flat zip plus the `index.yml` that
 advertises it. The zip must stay flat — stash writes each entry verbatim under
-`plugins/<id>/`, so a wrapping directory would nest. The included GitHub Actions
-workflow tests, builds and publishes `dist/` to GitHub Pages, which makes
-`https://<user>.github.io/<repo>/index.yml` the source URL users add.
+`plugins/<id>/`, so a wrapping directory would nest.
+
+### Publishing
+
+The GitHub Actions workflow tests and builds on every push. The publish step is
+skipped while the repo is private — GitHub Pages needs a public repo (or a paid
+plan), and publishing should be deliberate anyway. To go live: make the repo
+public, enable Pages under Settings > Pages with **Source: GitHub Actions**, and
+push. `https://<user>.github.io/<repo>/index.yml` is then the source URL users
+add under Settings > Plugins > Available Plugins > Add Source.
 
 ## Notes on stash internals
 

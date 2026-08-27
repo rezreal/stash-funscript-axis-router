@@ -30,8 +30,12 @@ jobs:
         with:
           path: dist
 
+  # Pages is not available for a private repo on a free plan, and publishing is
+  # a deliberate act anyway - so this stays skipped until the repo is public.
+  # Flip it public and the next push publishes with no further changes.
   deploy:
     needs: build
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     environment:
       name: github-pages
