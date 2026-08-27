@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the auxiliary axes of a multi-axis funscript (roll, pitch, surge, ...)
   to an XToys webhook, while the built-in Handy client keeps playing the main
   stroke axis untouched.
-version: 0.1.0
+version: 0.2.0
 url: https://github.com/stashapp/stash
 
 ui:
