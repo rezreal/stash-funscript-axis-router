@@ -8,7 +8,7 @@ set -euo pipefail
 
 ID="funscriptAxisRouter"
 NAME="Funscript Axis Router"
-DESC="Routes the axes of a multi-axis funscript to an XToys webhook, leaving the stroke axis to the Handy."
+DESC="(Beta) Routes the axes of a multi-axis funscript to an XToys webhook, leaving the stroke axis to the Handy."
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST="$ROOT/dist"

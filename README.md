@@ -1,5 +1,10 @@
 # Funscript Axis Router
 
+> **Beta.** The logic is covered by tests, but it has not yet been exercised
+> against real hardware — the XToys parameter names your script expects and the
+> real-world latency at the default 10 Hz are the two things most likely to need
+> adjusting. Expect to tweak settings, and please report what you find.
+
 A **UI-only** [stash](https://github.com/stashapp/stash) plugin. No backend
 process, no build step for the plugin itself — two files.
 
@@ -134,4 +139,4 @@ Three things this plugin works around, all in `ui/v2.5/src/hooks/Interactive/`:
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE), matching [stash](https://github.com/stashapp/stash) itself.

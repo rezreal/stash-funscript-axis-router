@@ -1,4 +1,10 @@
 // Funscript Axis Router
+// Copyright (C) 2026 Funscript Axis Router contributors
+//
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Affero General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option) any
+// later version. See the LICENSE file for the full text.
 //
 // Replaces stash's interactive client with one that delegates the stroke axis
 // to the stock Handy client and streams the remaining axes of a multi-axis
