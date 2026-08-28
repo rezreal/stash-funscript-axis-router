@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var VERSION = "0.9.2";      /* logged on start, so you can see what is loaded */
+var VERSION = "0.9.3";      /* logged on start, so you can see what is loaded */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -201,10 +201,12 @@ function onSeekControl()   { send("seek", { percent: numVar("Seek", 0) }); }
 
 /* ---------------------------------------------------------------- dispatch */
 
-/* One trigger for everything, dispatched on trigger-action. The callback is
- * given no way to tell which registered trigger fired, so an action-filtered
- * trigger and a bare one that fires for everything are indistinguishable.
- * Dispatching here needs no assumption and cannot double-fire. */
+/* One trigger for everything, dispatched here on trigger-action.
+ *
+ * action: "*" is the documented catch-all. Omitting action entirely does NOT
+ * mean "any" - the trigger registers without complaint and then never fires,
+ * which is what made this silent for so long. Dispatching in JavaScript keeps
+ * it to a single trigger that cannot double-fire. */
 function onMessage(data) {
   if (!announced) {
     announced = true;
@@ -225,7 +227,7 @@ function onMessage(data) {
   else if (action === "heartbeat") onHeartbeat(data);
 }
 
-registerTrigger({ type: "componentState", channel: WEBHOOK }, onMessage);
+registerTrigger({ type: "componentState", channel: WEBHOOK, action: "*" }, onMessage);
 
 /* A Control's name is both its variable and its on-screen label. */
 registerTrigger({ type: "variableChange", variable: "Play" },    onPlayButton);

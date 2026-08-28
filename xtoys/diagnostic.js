@@ -79,6 +79,8 @@ for (i = 0; i < keyList.length; i++) {
 
 for (var c2 = 0; c2 < chList.length; c2++) {
   var ch = chList[c2];
+  /* the documented catch-all; omitting action entirely registers but never fires */
+  n = n + reg({ type: "componentState", channel: ch, action: "*" });
   n = n + reg({ type: "componentState", channel: ch });
 
   /* webhook shape: dispatch on the action value */
