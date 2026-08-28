@@ -20,6 +20,8 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     paused() { return this.isPaused; },
     duration() { return this.dur; },
     play() { this.isPaused = false; calls.push("play"); },
+    rate: 1,
+    playbackRate(v) { if (v !== undefined) { this.rate = v; calls.push("rate:" + v); } return this.rate; },
     pause() { this.isPaused = true; calls.push("pause"); },
   };
   let tickFn = null, hbSlot = null, stSlot = null, tickMs = null;
@@ -738,6 +740,43 @@ console.log("\nsession events");
   e.calls.length = 0;
   sock.onmessage({ data: JSON.stringify({ event: "join", type: "guest", uid: "x" }) });
   eq("session events drive nothing", e.calls, []);
+}
+
+
+// ---- 29. playback rate ---------------------------------------------------
+console.log("\nplayback rate");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", remoteControl: true });
+  await e.client.uploadScript("http://x/scene/42/funscript");
+  await new Promise(r => setTimeout(r, 5));
+  const sock = e.sock();
+
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "rate", rate: 1.5 }) });
+  eq("absolute rate", e.calls, ["rate:1.5"]);
+
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "rate", percent: 0 }) });
+  eq("slider at 0 is the slowest useful rate", e.calls, ["rate:0.25"]);
+
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "rate", percent: 100 }) });
+  eq("slider at 100 is the fastest", e.calls, ["rate:2"]);
+
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "rate", rate: 99 }) });
+  eq("absurd rates are clamped", e.calls, ["rate:2"]);
+
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "rate", percent: 43 }) });
+  eq("slider positions round to a clean step", e.calls, ["rate:1"]);
+
+  // and it is reported back, so a remote can show the current speed
+  e.player.rate = 1.5;
+  const st = e.sent.filter(m => m.action === "status").pop();
+  sock.onmessage({ data: JSON.stringify({ action: "rate", rate: 1.25 }) });
+  const after = e.sent.filter(m => m.action === "status").pop();
+  eq("rate published in status", after.rate, "1.25");
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");

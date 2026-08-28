@@ -609,6 +609,7 @@
       position: Math.round(p.currentTime() || 0),
       duration: Math.round(isFinite(duration) ? duration : 0),
       playing: p.paused() ? 0 : 1,
+      rate: p.playbackRate ? p.playbackRate() : 1,
       // what this scene actually carries, so a remote can list the names that
       // are worth mapping to an output instead of the user guessing
       channels: this.channels.join(","),
@@ -616,7 +617,8 @@
 
     // position ticks every second anyway, so only skip when truly unchanged
     var key = [
-      status.title, status.position, status.duration, status.playing, status.channels,
+      status.title, status.position, status.duration, status.playing,
+      status.channels, status.rate,
     ].join("|");
     if (key === this.last) return;
     this.last = key;
@@ -663,6 +665,18 @@
     }
 
     return out;
+  }
+
+  // Playback rate bounds. Chrome refuses rates outside roughly 0.0625-16, and
+  // anything past these is not useful for watching anyway.
+  var RATE_MIN = 0.25;
+  var RATE_MAX = 2;
+
+  function setRate(player, rate) {
+    var r = clamp(rate, RATE_MIN, RATE_MAX);
+    // round to the nearest 0.05 so a slider does not report 1.2999999999
+    r = Math.round(r * 20) / 20;
+    player.playbackRate(r);
   }
 
   // XToys announces session membership over the same socket:
@@ -734,6 +748,16 @@
         break;
       case "skip":
         seekTo((p.currentTime() || 0) + num(msg.seconds, 0));
+        break;
+      case "rate":
+        // absolute when given a rate, otherwise a slider position mapped across
+        // the useful range - a 0-100 control cannot express 1.0x on its own
+        if (msg.rate !== undefined) {
+          setRate(p, num(msg.rate, 1));
+        } else if (msg.percent !== undefined) {
+          var pct = clamp(num(msg.percent, 50), 0, 100) / 100;
+          setRate(p, RATE_MIN + pct * (RATE_MAX - RATE_MIN));
+        }
         break;
       default:
         return; // not ours; axes/pause/heartbeat echo back harmlessly

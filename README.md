@@ -144,8 +144,8 @@ SR6 driven through XToys.
 ## Remote control
 
 The websocket runs both ways. The plugin publishes what the player is doing —
-title, position, duration, playing — about once a second, and can accept
-`play` / `pause` / `toggle` / `seek` / `skip` back. An XToys script then works as
+title, position, duration, playing, rate — about once a second, and can accept
+`play` / `pause` / `toggle` / `seek` / `skip` / `rate` back. An XToys script then works as
 a remote for the stash player, which is the point when stash is on a phone or
 headset and someone else is running the session.
 

@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "9193756e";             /* content hash, stamped by stamp.mjs */
+var BUILD = "7e781c46";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -162,6 +162,7 @@ function onStatus(data) {
   var pos = parseFloat(data["trigger-position"]) || 0;
   var dur = parseFloat(data["trigger-duration"]) || 0;
   setUiVariable("Elapsed", clock(pos) + " / " + clock(dur));
+  setUiVariable("Rate", (data["trigger-rate"] || "1") + "x");
 
   /* raw values, for anything doing arithmetic rather than display */
   setUiVariable("videoPosition", data["trigger-position"] || "0");
@@ -223,6 +224,7 @@ function onPauseButton()   { send("pause"); }
 function onRewindButton()  { send("skip", { seconds: -numVar("skipSeconds", SKIP_SECONDS) }); }
 function onForwardButton() { send("skip", { seconds: numVar("skipSeconds", SKIP_SECONDS) }); }
 function onSeekControl()   { send("seek", { percent: numVar("Seek", 0) }); }
+function onSpeedControl()  { send("rate", { percent: numVar("Speed", 43) }); }
 
 /* ---------------------------------------------------------------- dispatch */
 
@@ -266,6 +268,7 @@ registerTrigger({ type: "variableChange", variable: "Pause" },   onPauseButton);
 registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewindButton);
 registerTrigger({ type: "variableChange", variable: "Forward" }, onForwardButton);
 registerTrigger({ type: "variableChange", variable: "Seek" },    onSeekControl);
+registerTrigger({ type: "variableChange", variable: "Speed" },   onSpeedControl);
 
 /* ------------------------------------------------------------------ report */
 
@@ -277,6 +280,8 @@ function seed(name, value) {
 seed("rampMs", RAMP_MS);
 seed("skipSeconds", SKIP_SECONDS);
 seed("watchdogMs", 3000);
+/* 43% of the 0.25-2x range is 1x, so the slider starts at normal speed */
+seed("Speed", 43);
 
 console.log("funscript axis router build " + BUILD + ", listening on '" + WEBHOOK + "'");
 
@@ -294,7 +299,7 @@ if (OUTS.length === 0) {
 
 console.log("controls: Scene, Elapsed, Playing, Channels (display) | " +
             "out1.." + OUTS.length + " (routing) | " +
-            "Play, Pause, Rewind, Forward (push), Seek (slider) | " +
+            "Play, Pause, Rewind, Forward (push), Seek, Speed (sliders) | " +
             "skipSeconds, rampMs, watchdogMs (advanced)");
 
 stopAll();
