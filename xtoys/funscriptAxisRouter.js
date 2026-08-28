@@ -74,6 +74,26 @@ function findWebhook() {
 WEBHOOK = findWebhook();
 console.log("listening on channel '" + WEBHOOK + "'");
 
+/* Outputs the script is allowed to drive. Anything in OUTPUTS that is not a
+ * connected block is skipped rather than throwing on every frame - the default
+ * list runs to eight and most setups have fewer. */
+var available = {};
+var missing = "";
+try {
+  var connected = getConnectedBlocks() || {};
+  for (var b in connected) { available[b] = true; }
+} catch (e2) {
+  for (var m = 0; m < OUTPUTS.length; m++) available[OUTPUTS[m].toy] = true;
+}
+for (var o = 0; o < OUTPUTS.length; o++) {
+  if (OUTPUTS[o].channel && !available[OUTPUTS[o].toy]) {
+    missing = missing + OUTPUTS[o].toy + " ";
+  }
+}
+if (missing) {
+  console.log("mapped but not connected, will be skipped: " + missing);
+}
+
 function channelFor(i) {
   if (!USE_CONTROLS) return OUTPUTS[i].channel;
   var v = getVariable("channel" + (i + 1));
@@ -81,6 +101,7 @@ function channelFor(i) {
 }
 
 function setOutput(toy, percent) {
+  if (!available[toy]) return;
   callAction({
     type: "updateComponent",
     channel: toy,
@@ -165,16 +186,23 @@ function seekPct(p)  { sendToStash({ type: "updateComponent", action: "send", da
 
 /* Add push Controls with these names and they become remote buttons. A push
  * Control sets its variable, which is what fires these. */
-registerTrigger({ type: "variableChange", variable: "btnPlay" },  function () { play(); });
-registerTrigger({ type: "variableChange", variable: "btnPause" }, function () { pause(); });
-registerTrigger({ type: "variableChange", variable: "btnToggle" }, function () { toggle(); });
-registerTrigger({ type: "variableChange", variable: "btnBack" },  function () { skip(-30); });
-registerTrigger({ type: "variableChange", variable: "btnFwd" },   function () { skip(30); });
+/* Named top-level functions rather than inline ones: JS-Interpreter is not a
+ * full ES5 engine and handles anonymous nested functions poorly. */
+function onBtnPlay()   { play(); }
+function onBtnPause()  { pause(); }
+function onBtnToggle() { toggle(); }
+function onBtnBack()   { skip(-30); }
+function onBtnFwd()    { skip(30); }
+function onSeek()      { seekPct(parseFloat(getVariable("seekPercent")) || 0); }
+
+registerTrigger({ type: "variableChange", variable: "btnPlay" },   onBtnPlay);
+registerTrigger({ type: "variableChange", variable: "btnPause" },  onBtnPause);
+registerTrigger({ type: "variableChange", variable: "btnToggle" }, onBtnToggle);
+registerTrigger({ type: "variableChange", variable: "btnBack" },   onBtnBack);
+registerTrigger({ type: "variableChange", variable: "btnFwd" },    onBtnFwd);
 
 /* A slider Control named seekPercent scrubs the video. */
-registerTrigger({ type: "variableChange", variable: "seekPercent" }, function () {
-  seekPct(parseFloat(getVariable("seekPercent")) || 0);
-});
+registerTrigger({ type: "variableChange", variable: "seekPercent" }, onSeek);
 
 function onHeartbeat(data) {
   /* Liveness only. The deadman switch itself is the Watchdog Job - see the
@@ -182,14 +210,32 @@ function onHeartbeat(data) {
    * the interpreter. */
 }
 
-registerTrigger(
-  { type: "componentState", channel: WEBHOOK, action: ACTION }, onAxes);
-registerTrigger(
-  { type: "componentState", channel: WEBHOOK, action: "pause" }, onPause);
-registerTrigger(
-  { type: "componentState", channel: WEBHOOK, action: "heartbeat" }, onHeartbeat);
-registerTrigger(
-  { type: "componentState", channel: WEBHOOK, action: "status" }, onStatus);
+/* One trigger for everything, dispatched here on trigger-action.
+ *
+ * Registering action-filtered triggers appeared to work, but the callback gets
+ * no way to tell which one fired, so there was no evidence the filtering was
+ * real - a bare trigger firing for every message looks identical. Since the
+ * action arrives as trigger-action anyway, dispatching here needs no such
+ * assumption, and one trigger cannot double-fire. */
+function onMessage(data) {
+  var action = String(data["trigger-action"] || "");
+
+  if (!announced) {
+    announced = true;
+    var body = "";
+    for (var k in data) { body = body + k + "=" + data[k] + "  "; }
+    console.log("first message: " + body);
+  }
+
+  if (action === ACTION) onAxes(data);
+  else if (action === "pause") onPause(data);
+  else if (action === "status") onStatus(data);
+  else if (action === "heartbeat") onHeartbeat(data);
+}
+
+var announced = false;
+
+registerTrigger({ type: "componentState", channel: WEBHOOK }, onMessage);
 
 stopAll();
 console.log("funscript axis router ready, " + OUTPUTS.length + " outputs");
