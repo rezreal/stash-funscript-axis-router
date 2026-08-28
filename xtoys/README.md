@@ -12,30 +12,41 @@ funscript channel you name.
 
 ## Where messages come in
 
-The script declares one input channel. By default that is a **Webhook block
-inside the script**:
+XToys has more than one inbound path, and they are not interchangeable. All of
+them are WebSockets to `webhook.xtoys.app`, so the transport is not what
+distinguishes them:
 
-```json
-"webhook-a": { "type": "webhook", "outbound": false }
-```
+| Path | Who dials whom | Auth | Built for |
+|---|---|---|---|
+| **Webhook block** in a script | you dial in | webhook ID only | occasional events |
+| **Webhook toy** (custom toy) | you dial in | ID **and** token | continuous device traffic |
+| **Websocket toy** (custom toy) | XToys dials out to you | — | continuous, needs a reachable host |
 
-Its webhook ID is the only credential — **no token needed**, so you can leave the
-plugin's *XToys Token* blank. This is the arrangement the script was built
-around, and the one there is a known-good example of.
+This script currently declares a **Webhook block**, because that is the only one
+there is a public example of — the Bondage Club integration, whose export the
+generator was modelled on.
 
-### Using your custom webhook toy instead
+**That may well be the wrong choice here.** That integration sends sparse game
+events (an item equipped, an activity started), nothing like a 10 Hz stream. The
+path evidently built for continuous traffic is a custom toy: `knock-rod` streams
+over one, and custom toys are the ones with a *Max Message Frequency* setting. If
+axis updates arrive throttled or dropped, this is the first thing to suspect.
 
-If you would rather feed the script from a custom toy you already created at
-`xtoys.app/me/custom-toys` (the kind that gives you an ID *and* a token), edit
-`INPUT_CHANNEL` / `INPUT_CHANNEL_DEF` at the top of `build-xtoys-script.py` and
-regenerate. Everything else — the triggers, the outputs, the watchdog — follows
-automatically.
+### Switching to a custom toy
 
-You will need the `type` string XToys uses for that toy in a script, which is not
-documented anywhere I could find. To get it: build a throwaway script in XToys
-with the toy attached, export it, and read the name out of its `channels` map.
+The plugin already speaks that path — set *XToys Token*, and clear *XToys Action
+Name* if your toy expects bare `{"roll":"62"}` pairs rather than the script
+envelope.
 
-## Setup
+For the script, edit `INPUT_CHANNEL` / `INPUT_CHANNEL_DEF` at the top of
+`build-xtoys-script.py` and regenerate; the triggers follow. What is still
+missing is the `type` string XToys uses for a custom toy in a script export.
+It is not documented, and the one public export does not contain one, so it
+cannot be guessed — a wrong name simply fails on import. To find it: attach the
+toy to a throwaway script in XToys, export it, and read the name out of the
+`channels` map.
+
+## Setup## Setup
 
 1. Import `funscriptAxisRouter.xtoys.json` into XToys.
 2. Open the script's **Webhook** block and copy the webhook ID into the stash
