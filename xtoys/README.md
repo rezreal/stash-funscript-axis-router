@@ -76,7 +76,7 @@ From the [Webhook tool docs](https://guide.xtoys.app/tools/webhook.html):
 - A webhook accepts **GET**, **POST** or **WebSocket**. WebSocket is the one to
   use here, and the docs describe it as suited to continuous exchange.
 - **Every message must have an `action` key.** Not optional — which is why the
-  plugin sends one, and why leaving *XToys Action Name* blank is valid only for a
+  plugin sends one, and why leaving *Action Name* blank is valid only for a
   custom toy, never a webhook.
 - The script gets the `action` value plus every other key/value pair, exposed to
   connected actions as `{trigger-<key>}` and destroyed once they finish.
@@ -107,8 +107,8 @@ Use a **Private Webhook** instead:
    the Webhook ID.
 2. In your script, use the plug button to add and connect a **Webhook** block.
    Tick **"Script can send outbound messages"** if you want the remote controls.
-3. Put the Webhook ID into the plugin's *XToys Webhook ID*, and leave
-   *XToys Token* blank — private webhooks need no token.
+3. Put the Webhook ID into the plugin's *Webhook ID*, and leave
+   *Auth Token* blank — private webhooks need no token.
 
 ### Older notes on custom toys
 
@@ -135,7 +135,7 @@ Webhook block does. If it does not, the Webhook block is the only inbound route.
 
 1. Add a **Webhook** tool and connect it to the script. Add one **Generic** toy
    per output you want.
-2. Copy the Webhook ID into the plugin's *XToys Webhook ID* setting.
+2. Copy the Webhook ID into the plugin's *Webhook ID* setting.
 3. Paste `funscriptAxisRouter.js` into the JS editor and edit `OUTPUTS`, or build
    the blocks by hand as below.
 4. Press play in stash. The browser console lists the channels being routed if

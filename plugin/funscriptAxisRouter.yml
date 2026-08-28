@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.8.0
+version: 0.8.1
 url: https://github.com/stashapp/stash
 
 ui:
@@ -23,21 +23,23 @@ settings:
       at all. Turn this on if the Handy drifts out of phase with the other axes.
     type: BOOLEAN
   xtoysWebhookId:
-    displayName: XToys Webhook ID
+    displayName: Webhook ID
     description: >-
-      The webhook ID shown by the Webhook block in your XToys script. Connects
-      to wss://webhook.xtoys.app/<id>. Leave blank to disable routing.
+      The Webhook ID from XToys, created under Private Webhooks at xtoys.app/me
+      and shown on the Webhook block in your script. Connects to
+      wss://webhook.xtoys.app/<id>. Leave blank to disable routing.
     type: STRING
   xtoysToken:
-    displayName: XToys Token
+    displayName: Auth Token
     description: >-
-      Token for an XToys custom toy, sent as ?token= on the websocket URL. Leave
-      blank for a private webhook, which needs no token. On a good
+      Only for a Shared Webhook, sent as ?token= on the websocket URL. Leave
+      blank for a Private Webhook - it authenticates on the Webhook ID alone,
+      and a stray token may get the connection rejected. On a good
       connection XToys replies with an acknowledgement, logged to the browser
       console; a warning appears there if none arrives.
     type: STRING
   xtoysAction:
-    displayName: XToys Action Name
+    displayName: Action Name
     description: >-
       Sent as the "action" field, which is how a webhook trigger inside an XToys
       script decides which trigger fires. Axis updates use this name; the pause

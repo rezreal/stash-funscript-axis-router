@@ -32,8 +32,8 @@ Configure under **Settings > Plugins > Funscript Axis Router**.
 1. In XToys, create the thing that will receive the messages — either a
    **Webhook** trigger block inside a script, or a **custom toy**
    (`xtoys.app/me/custom-toys`).
-2. Copy its webhook ID into the *XToys Webhook ID* setting. If it also gives you
-   a token, put that in *XToys Token*.
+2. Copy its webhook ID into the *Webhook ID* setting. If it also gives you
+   a token, put that in *Auth Token*.
 3. Have your script read the channel names your funscript uses.
 
 ### A ready-made script
@@ -63,7 +63,7 @@ named at runtime. A script using `registerTrigger` receives the whole map in its
 callback and has no use for it.
 
 The XToys [webhook docs](https://guide.xtoys.app/tools/webhook.html) are explicit
-that *"webhook messages must have an action key"*, so leave *XToys Action Name*
+that *"webhook messages must have an action key"*, so leave *Action Name*
 set for anything webhook-based. Blank drops the envelope and sends bare
 `{"roll":"62"}`, which is only right for a **custom toy**. A channel named `action` is skipped with a console warning while the envelope is
 on, and `payload` likewise only when the payload copy is enabled.
@@ -78,7 +78,7 @@ channel can be called anything without colliding with the protocol.
 
 ### About the token
 
-A **custom toy** gives you a token; pass it in *XToys Token* and it is sent as a
+A **custom toy** gives you a token; pass it in *Auth Token* and it is sent as a
 query parameter:
 
 ```
@@ -105,9 +105,9 @@ usually a wrong token.
 | Setting | Default | Notes |
 |---|---|---|
 | Route Stroke Axis Here | off | See *Who drives the stroke axis* below. |
-| XToys Webhook ID | — | Blank disables routing entirely. |
-| XToys Token | — | Only for a custom toy; sent as `?token=`. See *About the token* above. |
-| XToys Action Name | `axes` | Which script trigger fires. Blank sends bare channel/value pairs. |
+| Webhook ID | — | From xtoys.app/me → Private Webhooks. Blank disables routing entirely. |
+| Auth Token | — | Only for a **Shared** Webhook; sent as `?token=`. Blank for a Private one. |
+| Action Name | `axes` | Which script trigger fires. Blank sends bare channel/value pairs. |
 | Include Payload Copy | off | Repeat the channels as a JSON string. Doubles frame size; only for the block route. |
 | Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
 | Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
@@ -255,7 +255,7 @@ shows frames live.
 
 **No "XToys socket open" at all.** The socket is opened as soon as the plugin
 loads, so this means the plugin did not load or has no webhook ID. Check it
-appears in Settings > Plugins, that *XToys Webhook ID* is set, and that
+appears in Settings > Plugins, that *Webhook ID* is set, and that
 Settings > Interface does not have customizations disabled.
 
 **Socket opens, then closes repeatedly.** Wrong webhook ID, or a shared webhook
