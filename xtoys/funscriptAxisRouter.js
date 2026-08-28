@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "7e781c46";             /* content hash, stamped by stamp.mjs */
+var BUILD = "c6fd496e";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -128,10 +128,23 @@ function readValue(data, name) {
   return Math.round(v);
 }
 
+/* XToys merges trigger data rather than replacing it: a status message still
+ * carries the previous axes message's keys, and trigger-event=join persists for
+ * the whole session. So a channel the current scene does not have keeps its
+ * value from the last scene that did, and would go on driving an output.
+ *
+ * status publishes the channel list, so only honour channels that are in it. */
+function sceneHasChannel(name) {
+  if (lastChannels === null || lastChannels === "") return true; /* not known yet */
+  return ("," + lastChannels + ",").indexOf("," + name + ",") !== -1;
+}
+
 function onAxes(data) {
   if (halted) return;
   for (var i = 0; i < OUTS.length; i++) {
-    var v = readValue(data, channelFor(i));
+    var name = channelFor(i);
+    if (!sceneHasChannel(name)) continue;
+    var v = readValue(data, name);
     if (v !== null) setOutput(OUTS[i], v);
   }
 }
@@ -171,9 +184,18 @@ function onStatus(data) {
 
   var chans = data["trigger-channels"] || "";
   if (chans !== lastChannels) {
+    var previous = lastChannels;
     lastChannels = chans;
     setUiVariable("Channels", chans);
     console.log("channels in this scene: " + (chans === "" ? "(none)" : chans));
+
+    /* Zero anything the new scene cannot drive, rather than leaving it stuck at
+     * whatever the last scene left it on. */
+    if (previous !== null) {
+      for (var i = 0; i < OUTS.length; i++) {
+        if (!sceneHasChannel(channelFor(i))) setOutput(OUTS[i], 0);
+      }
+    }
   }
 }
 
