@@ -62,8 +62,10 @@ travel with them:
   "read whatever channel the user typed into a config box", so a script parses
   this instead and indexes it by name at runtime.
 
-Set *XToys Action Name* to blank to drop the envelope and send bare
-`{"roll":"62"}`, which is what a **custom toy** expects. Channels named `action`
+The XToys [webhook docs](https://guide.xtoys.app/tools/webhook.html) are explicit
+that *"webhook messages must have an action key"*, so leave *XToys Action Name*
+set for anything webhook-based. Blank drops the envelope and sends bare
+`{"roll":"62"}`, which is only right for a **custom toy**. Channels named `action`
 or `payload` are skipped with a console warning while the envelope is on.
 
 **Channel names are taken verbatim from the funscript.** A v2.0 file with
@@ -88,8 +90,9 @@ browser cannot set headers on a WebSocket. The query parameter is what works
 from one — as demonstrated by [knock-rod](https://github.com/rezreal/knock-rod),
 which drives XToys from the browser this way.
 
-A **webhook block inside a script** needs no token, so leaving the field blank is
-equally valid.
+Per the docs, a **private** webhook needs only its ID, while a **shared** webhook
+also wants the token. Prefer a private one and leave the field blank — it avoids
+the header question altogether.
 
 On a good connection XToys replies `{"success": true}`. That is logged as
 `XToys acknowledged the connection`. Sending is not gated on it, since a

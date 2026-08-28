@@ -32,7 +32,7 @@ settings:
     displayName: XToys Token
     description: >-
       Token for an XToys custom toy, sent as ?token= on the websocket URL. Leave
-      blank for a webhook block in a script, which needs no token. On a good
+      blank for a private webhook, which needs no token. On a good
       connection XToys replies with an acknowledgement, logged to the browser
       console; a warning appears there if none arrives.
     type: STRING
@@ -42,8 +42,8 @@ settings:
       Sent as the "action" field, which is how a webhook trigger inside an XToys
       script decides which trigger fires. Axis updates use this name; the pause
       and heartbeat messages use "pause" and "heartbeat". Defaults to "axes".
-      Leave blank to send bare channel/value pairs with no envelope, which is
-      what a custom toy expects.
+      XToys requires an action key on every webhook message, so only leave this
+      blank for a custom toy, which expects bare channel/value pairs.
     type: STRING
   stopValue:
     displayName: Stop Value

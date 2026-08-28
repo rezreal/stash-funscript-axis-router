@@ -10,43 +10,46 @@ funscript channel you name.
 > right, but treat it as a draft to fix up in the XToys editor rather than
 > something known to work. Please report what needed changing.
 
+## Is this file importable?
+
+**Probably not, and you should treat it as a blueprint rather than a file to
+load.** The XToys guide documents loading scripts from *My Scripts* and *Public
+Scripts*, and saving a public script to your own collection — but no JSON import
+anywhere. The one public integration that ships an `xtoys_script.json`
+(Bondage Club) does not tell people to import it either; it points them at a
+published script URL and says *Load Script*. The JSON in that repo is a
+reference copy.
+
+So unless the editor has an undocumented import — worth a look, and do say if you
+find one — the practical path is to build the script once in the XToys editor
+using **[Building it by hand](#building-it-by-hand)** below, then publish it and
+share the link. This JSON stays useful as the exact specification of what to
+build, and as something to diff against later.
+
 ## Where messages come in
 
-XToys has more than one inbound path, and they are not interchangeable. All of
-them are WebSockets to `webhook.xtoys.app`, so the transport is not what
-distinguishes them:
+From the [Webhook tool docs](https://guide.xtoys.app/tools/webhook.html):
 
-| Path | Who dials whom | Auth | Built for |
-|---|---|---|---|
-| **Webhook block** in a script | you dial in | webhook ID only | occasional events |
-| **Webhook toy** (custom toy) | you dial in | ID **and** token | continuous device traffic |
-| **Websocket toy** (custom toy) | XToys dials out to you | — | continuous, needs a reachable host |
+- A webhook accepts **GET**, **POST** or **WebSocket**. WebSocket is the one to
+  use here, and the docs describe it as suited to continuous exchange.
+- **Every message must have an `action` key.** This is not optional, which is why
+  the plugin sends one and why leaving *XToys Action Name* blank is only valid
+  for a custom toy, never for a webhook.
+- The script receives the `action` value plus every other key/value pair, exposed
+  to connected actions as `{trigger-<key>}` variables that are destroyed once
+  those actions finish.
+- A **private** webhook needs only its Webhook ID. A **shared** webhook also
+  needs `Authorization: Bearer <token>`.
 
-This script currently declares a **Webhook block**, because that is the only one
-there is a public example of — the Bondage Club integration, whose export the
-generator was modelled on.
+The auth token being a header is the awkward part, since a browser cannot set
+headers on a WebSocket — the plugin sends it as `?token=` instead, which is what
+`knock-rod` does successfully. A **private** webhook avoids the question
+entirely, so prefer one.
 
-**That may well be the wrong choice here.** That integration sends sparse game
-events (an item equipped, an activity started), nothing like a 10 Hz stream. The
-path evidently built for continuous traffic is a custom toy: `knock-rod` streams
-over one, and custom toys are the ones with a *Max Message Frequency* setting. If
-axis updates arrive throttled or dropped, this is the first thing to suspect.
+No rate limits are documented. If axis updates arrive throttled, lower the
+plugin's *Update Rate (Hz)* before assuming anything else is wrong.
 
-### Switching to a custom toy
-
-The plugin already speaks that path — set *XToys Token*, and clear *XToys Action
-Name* if your toy expects bare `{"roll":"62"}` pairs rather than the script
-envelope.
-
-For the script, edit `INPUT_CHANNEL` / `INPUT_CHANNEL_DEF` at the top of
-`build-xtoys-script.py` and regenerate; the triggers follow. What is still
-missing is the `type` string XToys uses for a custom toy in a script export.
-It is not documented, and the one public export does not contain one, so it
-cannot be guessed — a wrong name simply fails on import. To find it: attach the
-toy to a throwaway script in XToys, export it, and read the name out of the
-`channels` map.
-
-## Setup## Setup
+## Setup## Setup## Setup
 
 1. Import `funscriptAxisRouter.xtoys.json` into XToys.
 2. Open the script's **Webhook** block and copy the webhook ID into the stash
@@ -85,6 +88,35 @@ The plugin sends both. An XToys trigger binds incoming keys statically, as
 a config box". So the plugin repeats the whole channel map as one JSON string
 under `payload`, and the script parses that and indexes it by the configured
 names. The flat keys are still there for custom toys and simpler scripts.
+
+## Building it by hand
+
+The generated JSON describes exactly this. Build it once in the editor:
+
+**Blocks** — add a *Webhook* tool and connect it to the script. Add eight
+*Generic (1 output)* toys, or however many you need.
+
+**Controls** — eight textboxes `channel1` … `channel8` (labelled "Output N
+channel"), plus `rampMs` (default `100`) and `watchdogMs` (default `3000`).
+
+**Variables, at script start** — `out1` … `out8` to `0`, `halted` to `0`,
+`lastBeat` to `0`, and start the `Watchdog` job.
+
+**Trigger, action `axes`** — a Custom Code action with `{trigger-payload}` and
+the eight channel variables bound, holding the `pick`/`setVariables` code from
+the generated JSON. Follow it with eight *setVolume* actions, output N taking
+`{outN}` with ramp `{rampMs}/1000`, each conditional on `{outN} >= 0 && {halted} == 0`.
+
+**Trigger, action `pause`** — set `halted` to `{trigger-pause}`, and when it is
+`1`, setVolume `0` on every output.
+
+**Trigger, action `heartbeat`** — reset `lastBeat` to `0`.
+
+**Job `Watchdog`** — a 0.5 s timer that adds 500 to `lastBeat`, and drives every
+output to `0` once `{lastBeat} > {watchdogMs}`. Every trigger above also resets
+`lastBeat`, so it only fires when messages genuinely stop.
+
+**On script stop** — setVolume `0` on every output.
 
 ## Adapting it
 
