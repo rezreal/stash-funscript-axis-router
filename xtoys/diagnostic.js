@@ -1,19 +1,27 @@
-/* Funscript Axis Router - diagnostic
+/* Funscript Axis Router - diagnostic v3
  *
- * Paste into the XToys JS editor, then play a scene in stash and read the XToys
- * console. Drives nothing; only reports.
+ * Paste into the XToys JS editor, play a scene in stash, read the console.
+ * Drives nothing; only reports.
  *
- * It discovers your connected blocks and then registers every trigger shape we
- * know of against every one of them, so whichever combination actually fires
- * shows up. Webhook blocks dispatch on `action`; the JS docs show other block
- * types using `eventType`, and a custom-websocket toy is undocumented - so this
- * tries all of them rather than assuming.
+ * A webhook dispatches on the value of an "action" key. A custom websocket toy
+ * takes plain {"vibrate": "10"} with no action at all, so its dispatch is
+ * presumably keyed on the KEY name. v2 only probed action values and generic
+ * eventTypes, which is why nothing fired against a custom toy. This probes the
+ * key names we actually send, as variables and as trigger discriminators.
  *
  * ES5 only - no let/const/arrow functions.
  */
 
+/* Every key the plugin can put on the wire. */
+var KEYS = [
+  "roll", "pitch", "stroke", "surge", "sway", "twist", "suck", "valve", "lube",
+  "action", "pause", "heartbeat", "payload",
+  "title", "position", "duration", "playing", "scene",
+  /* common custom-toy command names, in case the toy defines its own schema */
+  "vibrate", "intensity", "speed", "value", "linear", "rotate"
+];
+
 var ACTIONS = ["axes", "status", "pause", "heartbeat"];
-var EVENT_TYPES = ["message", "data", "received", "value", "state"];
 
 /* ---------------------------------------------------------------- blocks */
 
@@ -30,16 +38,10 @@ for (var ch in blocks) {
   if (blocks.hasOwnProperty(ch)) channels.push(ch);
 }
 
-if (channels.length === 0) {
-  console.log("NO CONNECTED BLOCKS - use the plug button on the script block first");
-}
-
 /* -------------------------------------------------------------- reporting */
 
-/* Messages arrive up to ~10x a second, so report the first few of each distinct
- * trigger shape and then go quiet. */
 var seen = {};
-var LIMIT = 3;
+var LIMIT = 2;
 
 function dump(label) {
   return function (data) {
@@ -51,53 +53,51 @@ function dump(label) {
       if (data.hasOwnProperty(k)) parts.push(k + " = " + data[k]);
     }
     console.log("FIRED  " + label + "  {" + parts.join(", ") + "}");
-
-    if (seen[label] === LIMIT) console.log(label + ": further messages hidden");
+    if (seen[label] === LIMIT) console.log(label + ": further hidden");
   };
 }
 
-/* registerTrigger may reject a shape a block does not support, so each one is
- * attempted independently. */
 function tryTrigger(spec, label) {
   try {
     registerTrigger(spec, dump(label));
-    return true;
+    return 1;
   } catch (e) {
-    console.log("could not register " + label + ": " + e);
-    return false;
+    return 0;
   }
 }
 
 /* ---------------------------------------------------------------- probing */
 
-var registered = 0;
+var n = 0;
+
+/* 1. does an incoming key land as an XToys variable? */
+for (var k = 0; k < KEYS.length; k++) {
+  n += tryTrigger({ type: "variableChange", variable: KEYS[k] }, "variable " + KEYS[k]);
+}
 
 for (var i = 0; i < channels.length; i++) {
   var c = channels[i];
 
-  /* bare - does anything at all come off this channel? */
-  if (tryTrigger({ type: "componentState", channel: c }, "bare " + c)) registered++;
+  /* 2. anything at all off this channel */
+  n += tryTrigger({ type: "componentState", channel: c }, "bare " + c);
 
-  /* how a webhook dispatches */
-  for (var a = 0; a < ACTIONS.length; a++) {
-    if (tryTrigger(
-      { type: "componentState", channel: c, action: ACTIONS[a] },
-      "action=" + ACTIONS[a] + " on " + c
-    )) registered++;
+  /* 3. dispatch keyed on the JSON key name - the custom-toy shape */
+  for (var j = 0; j < KEYS.length; j++) {
+    n += tryTrigger({ type: "componentState", channel: c, eventType: KEYS[j] },
+                    "eventType=" + KEYS[j] + " on " + c);
+    n += tryTrigger({ type: "componentState", channel: c, action: KEYS[j] },
+                    "action=" + KEYS[j] + " on " + c);
   }
 
-  /* how the JS docs show a dice block dispatching */
-  for (var e2 = 0; e2 < EVENT_TYPES.length; e2++) {
-    if (tryTrigger(
-      { type: "componentState", channel: c, eventType: EVENT_TYPES[e2] },
-      "eventType=" + EVENT_TYPES[e2] + " on " + c
-    )) registered++;
+  /* 4. dispatch keyed on our action values - the webhook shape */
+  for (var a = 0; a < ACTIONS.length; a++) {
+    n += tryTrigger({ type: "componentState", channel: c, action: ACTIONS[a] },
+                    "action=" + ACTIONS[a] + " on " + c);
   }
 }
 
-console.log(
-  "diagnostic ready: " + registered + " triggers across " +
-  channels.length + " channel(s). Play a scene in stash now."
-);
-console.log("If nothing FIRES, this block type does not deliver messages to a " +
-            "script trigger - use a Private Webhook block instead.");
+console.log("diagnostic v3 ready: " + n + " triggers, " + channels.length +
+            " channel(s). Play a scene in stash now.");
+console.log("Note: a custom toy may only accept the command keys it was " +
+            "defined with. If only 'vibrate'-style keys fire, tell the plugin " +
+            "to use those names via its Axes To Route setting.");
