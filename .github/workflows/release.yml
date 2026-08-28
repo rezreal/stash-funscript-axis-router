@@ -24,6 +24,8 @@ jobs:
           node-version: "20"
       - name: Test
         run: node test/test.mjs
+      - name: Check the XToys scripts
+        run: node test/check-xtoys.mjs
       - name: Build package source
         run: ./build.sh
       - uses: actions/upload-pages-artifact@v3

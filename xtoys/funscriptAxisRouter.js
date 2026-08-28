@@ -4,15 +4,11 @@
  * in the top toolbar.
  *
  * Setup:
- *   1. Connect a Webhook block and one toy per output you want, then set
- *      WEBHOOK and TOYS below to their channel names. Both are in the
- *      channels: {} section of your Script Export.
- *   2. Add an input Control per output, named out1, out2, out3, ...
- *   3. Type a funscript channel name into each - roll, pitch, e-stim, whatever
- *      your file contains. The stash plugin logs the channels it routes.
- *
- * Outputs are paired with the Controls in order: the first toy in TOYS follows
- * out1, the second out2, and so on. The startup log prints the pairing.
+ *   1. Connect a Webhook block and one toy per output, then set WEBHOOK and
+ *      TOYS below from the channels: {} section of your Script Export.
+ *   2. Add input Controls named out1, out2, ... one per output.
+ *   3. Type a funscript channel name into each. The Channels Control lists
+ *      what the current scene actually carries.
  *
  * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow
  * functions, no template literals, no anonymous nested functions, no DOM.
@@ -20,64 +16,43 @@
 
 /* ------------------------------------------------------------------ config */
 
-/* Channel names, straight from the channels: {} section of your Script Export.
- * These are NOT discovered: getConnectedBlocks() has been observed returning an
- * object keyed by channel name in one script and a plain array in another, and
- * calling callAction() with a channel that does not exist crashes XToys
- * internally ("can't access property isToy"). Explicit is safer. */
+/* Channel names are NOT discovered. getConnectedBlocks() returns an object
+ * keyed by channel in one script and a plain array in another, will not
+ * marshal through the interpreter, and calling callAction() with a channel
+ * that does not exist crashes XToys internally. Set these by hand. */
 var WEBHOOK = "webhook-a";
-
-/* One entry per output, in order: the first follows Control out1, the second
- * out2, and so on. Comma separated, no spaces. */
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
-var ACTION = "axes";         /* must match the plugin's Action Name setting */
-var RAMP_MS = 100;           /* fallback if the rampMs Control is empty */
-var CUSTOM_TOY_KEY = "a";    /* which key a custom toy's setValue writes to */
-var CONTROL_PREFIX = "out";  /* Controls named out1, out2, ... hold channel names */
 
-/* --------------------------------------------------------------- discovery */
+var ACTION = "axes";        /* must match the plugin's Action Name setting */
+var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
+var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
+var CUSTOM_TOY_KEY = "a";   /* key a custom toy's setValue writes to */
+var CONTROL_PREFIX = "out"; /* Controls out1, out2, ... hold channel names */
 
 var OUTS = TOYS === "" ? [] : TOYS.split(",");
-
-/* getConnectedBlocks() is deliberately not called. What it returns is a native
- * object the interpreter will not marshal - JSON.stringify on it yields
- * "[object Object],getConnectedBlocks" and raises "Object is not pseudo" - and
- * its shape is inconsistent between scripts anyway. Read your channel names off
- * the Script Export instead. */
 
 /* --------------------------------------------------------------- internals */
 
 var halted = false;
 var announced = false;
+var lastChannels = null;
+var sendFailed = false;
 
-/* Read live rather than cached, so editing a Control takes effect immediately
- * without reloading the script. */
+function numVar(name, fallback) {
+  var v = parseFloat(getVariable(name));
+  return isNaN(v) || v < 0 ? fallback : v;
+}
+
+/* Read live so editing a Control takes effect without reloading the script. */
 function channelFor(i) {
   var v = getVariable(CONTROL_PREFIX + (i + 1));
   if (v === undefined || v === null) return "";
   return String(v);
 }
 
-/* Toy types do not share one interface. A generic toy takes setVolume with a
- * percentVolume; a custom toy takes setValue with a key, as seen in a real
- * script export. Anything unrecognised is treated as a generic toy. */
-function setOutput(toy, percent) {
-  if (!toy) return;
-  try {
-    setOutputUnsafe(toy, percent);
-  } catch (e) {
-    console.log("could not drive '" + toy + "': " + e +
-                " - check it against the channels in your Script Export");
-  }
-}
-
-function rampSeconds() {
-  var v = parseFloat(getVariable("rampMs"));
-  if (isNaN(v) || v < 0) v = RAMP_MS;
-  return v / 1000;
-}
-
-function setOutputUnsafe(toy, percent) {
+/* Toy types do not share one interface: a generic toy takes setVolume with a
+ * percentVolume, a custom toy takes setValue with a key. */
+function driveToy(toy, percent) {
   if (toy.indexOf("generic-custom-toy") === 0) {
     callAction({
       type: "updateComponent",
@@ -93,9 +68,19 @@ function setOutputUnsafe(toy, percent) {
     type: "updateComponent",
     channel: toy,
     action: "setVolume",
-    rampTime: rampSeconds(),
+    rampTime: numVar("rampMs", RAMP_MS) / 1000,
     percentVolume: String(percent)
   });
+}
+
+function setOutput(toy, percent) {
+  if (!toy) return;
+  try {
+    driveToy(toy, percent);
+  } catch (e) {
+    console.log("could not drive '" + toy + "': " + e +
+                " - check it against the channels in your Script Export");
+  }
 }
 
 function stopAll() {
@@ -104,8 +89,10 @@ function stopAll() {
   }
 }
 
-/* The trigger callback gets the whole message as trigger-<key>, so a channel
- * whose name was only typed into a Control at runtime can be read directly. */
+/* --------------------------------------------------------------- messages */
+
+/* The callback receives the whole message as trigger-<key>, so a channel whose
+ * name was only typed into a Control at runtime can be read directly. */
 function readValue(data, name) {
   if (!name) return null;
   var raw = data["trigger-" + name];
@@ -125,28 +112,15 @@ function onAxes(data) {
   }
 }
 
-function onPause(data) {
+function onPauseMessage(data) {
   halted = String(data["trigger-pause"]) === "1";
-  if (halted) /* Seed the numeric Controls so they show real values instead of empty boxes. */
-function seed(name, value) {
-  var v = getVariable(name);
-  if (v === undefined || v === null || String(v) === "") setVariable(name, value);
-}
-
-seed("rampMs", RAMP_MS);
-seed("skipSeconds", 30);
-
-console.log("remote controls to add (name:type): " + CONTROLS);
-
-stopAll();
+  if (halted) stopAll();
 }
 
 function onHeartbeat(data) {
-  /* Liveness only. The deadman switch is the Watchdog Job - JavaScript here has
+  /* Liveness only. The deadman switch is the Watchdog Job: JavaScript here has
    * no timer, and sleep() would block the interpreter. */
 }
-
-/* ------------------------------------------------------------------ remote */
 
 function clock(total) {
   total = Math.max(0, Math.round(total));
@@ -155,10 +129,9 @@ function clock(total) {
   return m + ":" + (sec < 10 ? "0" : "") + sec;
 }
 
+/* A Control reflects its variable and is labelled with its own name, so adding
+ * an input Control called Scene, Elapsed, Playing or Channels displays it. */
 function onStatus(data) {
-  /* Display Controls. A Control's name is both the variable it shows and its
-   * label, so these are named for how they should read on screen: add an input
-   * Control called Scene, Elapsed, Channels or Playing and it displays that. */
   setVariable("Scene", data["trigger-title"] || "");
   setVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
 
@@ -166,13 +139,11 @@ function onStatus(data) {
   var dur = parseFloat(data["trigger-duration"]) || 0;
   setVariable("Elapsed", clock(pos) + " / " + clock(dur));
 
-  /* Raw values too, for anything doing arithmetic rather than display. */
+  /* raw values, for anything doing arithmetic rather than display */
   setVariable("videoPosition", data["trigger-position"] || "0");
   setVariable("videoDuration", data["trigger-duration"] || "0");
   setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
 
-  /* Which channels this scene actually carries, so you can see what is worth
-   * putting in out1..outN rather than guessing. */
   var chans = data["trigger-channels"] || "";
   if (chans !== lastChannels) {
     lastChannels = chans;
@@ -181,15 +152,13 @@ function onStatus(data) {
   }
 }
 
-var lastChannels = null;
+/* ------------------------------------------------------------------ remote */
 
 /* Needs "Script can send outbound messages" ticked on the webhook connection.
  *
- * UNVERIFIED: the Action shape for an outbound webhook message is not in the
- * docs. If the buttons do nothing, use 'Add XToys Action' in the JS editor with
- * the webhook block selected to get the real JSON and fix this one function. */
-var sendFailed = false;
-
+ * UNVERIFIED: the Action shape for an outbound webhook message is not
+ * documented. If the buttons do nothing, use 'Add XToys Action' in this editor
+ * with the webhook block selected and correct this one function. */
 function sendToStash(msg) {
   msg.channel = WEBHOOK;
   try {
@@ -198,35 +167,34 @@ function sendToStash(msg) {
     if (!sendFailed) {
       sendFailed = true;
       console.log("sending to stash failed: " + e +
-                  " - use 'Add XToys Action' in this editor with the webhook " +
-                  "block selected to get the correct JSON, then fix sendToStash()");
+                  " - use 'Add XToys Action' with the webhook block selected " +
+                  "to get the correct JSON, then fix sendToStash()");
     }
   }
 }
 
-function play()     { sendToStash({ type: "updateComponent", action: "send", data: { action: "play" } }); }
-function pause()    { sendToStash({ type: "updateComponent", action: "send", data: { action: "pause" } }); }
-function toggle()   { sendToStash({ type: "updateComponent", action: "send", data: { action: "toggle" } }); }
-function skip(secs) { sendToStash({ type: "updateComponent", action: "send", data: { action: "skip", seconds: secs } }); }
-function seekPct(p) { sendToStash({ type: "updateComponent", action: "send", data: { action: "seek", percent: p } }); }
-
-function onPlay()  { play(); }
-function onPause() { pause(); }
-function skipAmount() {
-  var v = parseFloat(getVariable("skipSeconds"));
-  return isNaN(v) || v <= 0 ? 30 : v;
+function send(action, extra) {
+  var data = { action: action };
+  if (extra) {
+    for (var k in extra) { data[k] = extra[k]; }
+  }
+  sendToStash({ type: "updateComponent", action: "send", data: data });
 }
 
-function onRewind()  { skip(-skipAmount()); }
-function onForward() { skip(skipAmount()); }
-function onSeek()    { seekPct(parseFloat(getVariable("Seek")) || 0); }
+/* Button handlers. Named distinctly from the message handlers above - onPause
+ * previously meant both, which silently broke pause handling. */
+function onPlayButton()    { send("play"); }
+function onPauseButton()   { send("pause"); }
+function onRewindButton()  { send("skip", { seconds: -numVar("skipSeconds", SKIP_SECONDS) }); }
+function onForwardButton() { send("skip", { seconds: numVar("skipSeconds", SKIP_SECONDS) }); }
+function onSeekControl()   { send("seek", { percent: numVar("Seek", 0) }); }
 
 /* ---------------------------------------------------------------- dispatch */
 
-/* One trigger for everything, dispatched here on trigger-action. The callback
- * gets no way to tell which registered trigger fired, so an action-filtered
- * trigger and a bare one that fires for everything look identical - there was
- * never evidence the filtering worked. The action arrives in the data anyway. */
+/* One trigger for everything, dispatched on trigger-action. The callback is
+ * given no way to tell which registered trigger fired, so an action-filtered
+ * trigger and a bare one that fires for everything are indistinguishable.
+ * Dispatching here needs no assumption and cannot double-fire. */
 function onMessage(data) {
   if (!announced) {
     announced = true;
@@ -235,30 +203,37 @@ function onMessage(data) {
     console.log("first message: " + body);
   }
 
+  /* Feeds the Watchdog Job, which is the deadman switch: JavaScript has no
+   * timer, so the Job counts up and this resets it on every message. If the
+   * browser goes away the Job drives everything to zero. */
+  setVariable("lastBeat", 0);
+
   var action = String(data["trigger-action"] || "");
   if (action === ACTION) onAxes(data);
-  else if (action === "pause") onPause(data);
+  else if (action === "pause") onPauseMessage(data);
   else if (action === "status") onStatus(data);
   else if (action === "heartbeat") onHeartbeat(data);
 }
 
 registerTrigger({ type: "componentState", channel: WEBHOOK }, onMessage);
 
-/* A Control's name is both the variable it sets and the text shown on it, so
- * these are named for how they should read in the UI. */
-registerTrigger({ type: "variableChange", variable: "Play" },    onPlay);
-registerTrigger({ type: "variableChange", variable: "Pause" },   onPause);
-registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewind);
-registerTrigger({ type: "variableChange", variable: "Forward" }, onForward);
-registerTrigger({ type: "variableChange", variable: "Seek" },    onSeek);
-
-/* Controls the remote expects, so a missing one is obvious rather than just
- * being a button that does nothing. */
-var CONTROLS = "buttons: Play:push, Pause:push, Rewind:push, Forward:push, Seek:slider" +
-               "  |  display: Scene:input, Elapsed:input, Playing:input, Channels:input" +
-               "  |  advanced: skipSeconds:input, rampMs:input";
+/* A Control's name is both its variable and its on-screen label. */
+registerTrigger({ type: "variableChange", variable: "Play" },    onPlayButton);
+registerTrigger({ type: "variableChange", variable: "Pause" },   onPauseButton);
+registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewindButton);
+registerTrigger({ type: "variableChange", variable: "Forward" }, onForwardButton);
+registerTrigger({ type: "variableChange", variable: "Seek" },    onSeekControl);
 
 /* ------------------------------------------------------------------ report */
+
+function seed(name, value) {
+  var v = getVariable(name);
+  if (v === undefined || v === null || String(v) === "") setVariable(name, value);
+}
+
+seed("rampMs", RAMP_MS);
+seed("skipSeconds", SKIP_SECONDS);
+seed("watchdogMs", 3000);
 
 console.log("listening on '" + WEBHOOK + "'");
 
@@ -267,11 +242,16 @@ if (OUTS.length === 0) {
 } else {
   var summary = "";
   for (var s = 0; s < OUTS.length; s++) {
-    var name = channelFor(s);
+    var mapped = channelFor(s);
     summary = summary + "  " + CONTROL_PREFIX + (s + 1) + " (" + OUTS[s] + ") -> " +
-              (name === "" ? "(unset)" : name) + "\n";
+              (mapped === "" ? "(unset)" : mapped) + "\n";
   }
   console.log("output mapping:\n" + summary);
 }
+
+console.log("controls: Scene, Elapsed, Playing, Channels (display) | " +
+            "out1.." + OUTS.length + " (routing) | " +
+            "Play, Pause, Rewind, Forward (push), Seek (slider) | " +
+            "skipSeconds, rampMs, watchdogMs (advanced)");
 
 stopAll();

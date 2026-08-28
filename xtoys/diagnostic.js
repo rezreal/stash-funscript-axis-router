@@ -1,4 +1,4 @@
-/* Funscript Axis Router - diagnostic v4
+/* Funscript Axis Router - diagnostic v5
  *
  * Paste into the XToys JS editor, load a scene in stash, read the console.
  * Drives nothing; only reports.
@@ -54,15 +54,13 @@ function reg(spec) {
   }
 }
 
-/* ---------------------------------------------------------------- blocks */
-
-var blocks = {};
-try {
-  blocks = getConnectedBlocks();
-  console.log("connected blocks: " + JSON.stringify(blocks));
-} catch (e) {
-  console.log("getConnectedBlocks() failed: " + e);
-}
+/* getConnectedBlocks() is deliberately not called: it returns a native object
+ * the interpreter will not marshal, so JSON.stringify on it raises "Object is
+ * not pseudo" and kills the script at load. Read channel names off your Script
+ * Export instead - they are in the channels: {} section.
+ *
+ * Set this to the channel the messages arrive on. */
+var CHANNELS = "webhook-a";
 
 /* ---------------------------------------------------------------- probing */
 
@@ -76,7 +74,9 @@ for (i = 0; i < keyList.length; i++) {
   n = n + reg({ type: "variableChange", variable: keyList[i] });
 }
 
-for (var ch in blocks) {
+var chList = CHANNELS.split(",");
+for (var c2 = 0; c2 < chList.length; c2++) {
+  var ch = chList[c2];
   n = n + reg({ type: "componentState", channel: ch });
 
   /* webhook shape: dispatch on the action value */
@@ -91,4 +91,5 @@ for (var ch in blocks) {
   }
 }
 
-console.log("diagnostic v4 ready: " + n + " triggers. Load a scene in stash now.");
+console.log("diagnostic v5 ready: " + n + " triggers on " + CHANNELS +
+            ". Load a scene in stash now.");

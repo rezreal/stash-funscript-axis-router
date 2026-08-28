@@ -1,19 +1,158 @@
 {
   "initialActions": [
     {
-      "job": "Main",
+      "type": "updateVariable",
+      "value": "0",
+      "variable": "lastBeat"
+    },
+    {
+      "job": "Watchdog",
       "type": "updateJob",
-      "action": "start"
+      "action": "start",
+      "restart": false
     }
   ],
-  "finalActions": [],
+  "finalActions": [
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-a",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-b",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-c",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-d",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-e",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-f",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-g",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    },
+    {
+      "type": "updateComponent",
+      "action": "setVolume",
+      "channel": "generic-1-h",
+      "rampTime": "0.1",
+      "percentVolume": "0"
+    }
+  ],
   "globalTriggers": [],
   "jobs": {
-    "Main": {
+    "Watchdog": {
       "steps": {
         "START": {
           "actions": [],
-          "triggers": []
+          "triggers": [
+            {
+              "type": "timer",
+              "amount": "0.5",
+              "actions": [
+                {
+                  "type": "updateVariable",
+                  "value": "{lastBeat}+500",
+                  "variable": "lastBeat"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-a",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-b",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-c",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-d",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-e",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-f",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-g",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateComponent",
+                  "action": "setVolume",
+                  "channel": "generic-1-h",
+                  "rampTime": "0.1",
+                  "percentVolume": "0",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                }
+              ]
+            }
+          ]
         }
       }
     }
@@ -38,9 +177,25 @@
       "name": "out3",
       "type": "generic-1"
     },
-    "generic-custom-toy-b": {
-      "name": "stash",
-      "type": "generic-custom-toy"
+    "generic-1-d": {
+      "name": "out4",
+      "type": "generic-1"
+    },
+    "generic-1-e": {
+      "name": "out5",
+      "type": "generic-1"
+    },
+    "generic-1-f": {
+      "name": "out6",
+      "type": "generic-1"
+    },
+    "generic-1-g": {
+      "name": "out7",
+      "type": "generic-1"
+    },
+    "generic-1-h": {
+      "name": "out8",
+      "type": "generic-1"
     }
   },
   "controls": [
@@ -77,6 +232,22 @@
       "type": "input"
     },
     {
+      "name": "out5",
+      "type": "input"
+    },
+    {
+      "name": "out6",
+      "type": "input"
+    },
+    {
+      "name": "out7",
+      "type": "input"
+    },
+    {
+      "name": "out8",
+      "type": "input"
+    },
+    {
       "name": "Play",
       "type": "push"
     },
@@ -103,6 +274,10 @@
     {
       "name": "rampMs",
       "type": "input"
+    },
+    {
+      "name": "watchdogMs",
+      "type": "input"
     }
   ],
   "controlPresets": [],
@@ -111,5 +286,5 @@
     "voices": {},
     "patterns": {}
   },
-  "customFunctions": "/* Funscript Axis Router - XToys side\n *\n * Paste into the XToys JavaScript editor: open the Script, then the JS button\n * in the top toolbar.\n *\n * Setup:\n *   1. Connect a Webhook block and one toy per output you want, then set\n *      WEBHOOK and TOYS below to their channel names. Both are in the\n *      channels: {} section of your Script Export.\n *   2. Add an input Control per output, named out1, out2, out3, ...\n *   3. Type a funscript channel name into each - roll, pitch, e-stim, whatever\n *      your file contains. The stash plugin logs the channels it routes.\n *\n * Outputs are paired with the Controls in order: the first toy in TOYS follows\n * out1, the second out2, and so on. The startup log prints the pairing.\n *\n * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow\n * functions, no template literals, no anonymous nested functions, no DOM.\n */\n\n/* ------------------------------------------------------------------ config */\n\n/* Channel names, straight from the channels: {} section of your Script Export.\n * These are NOT discovered: getConnectedBlocks() has been observed returning an\n * object keyed by channel name in one script and a plain array in another, and\n * calling callAction() with a channel that does not exist crashes XToys\n * internally (\"can't access property isToy\"). Explicit is safer. */\nvar WEBHOOK = \"webhook-a\";\n\n/* One entry per output, in order: the first follows Control out1, the second\n * out2, and so on. Comma separated, no spaces. */\nvar TOYS = \"generic-1-a,generic-1-b,generic-1-c\";\nvar ACTION = \"axes\";         /* must match the plugin's Action Name setting */\nvar RAMP_MS = 100;           /* fallback if the rampMs Control is empty */\nvar CUSTOM_TOY_KEY = \"a\";    /* which key a custom toy's setValue writes to */\nvar CONTROL_PREFIX = \"out\";  /* Controls named out1, out2, ... hold channel names */\n\n/* --------------------------------------------------------------- discovery */\n\nvar OUTS = TOYS === \"\" ? [] : TOYS.split(\",\");\n\n/* getConnectedBlocks() is deliberately not called. What it returns is a native\n * object the interpreter will not marshal - JSON.stringify on it yields\n * \"[object Object],getConnectedBlocks\" and raises \"Object is not pseudo\" - and\n * its shape is inconsistent between scripts anyway. Read your channel names off\n * the Script Export instead. */\n\n/* --------------------------------------------------------------- internals */\n\nvar halted = false;\nvar announced = false;\n\n/* Read live rather than cached, so editing a Control takes effect immediately\n * without reloading the script. */\nfunction channelFor(i) {\n  var v = getVariable(CONTROL_PREFIX + (i + 1));\n  if (v === undefined || v === null) return \"\";\n  return String(v);\n}\n\n/* Toy types do not share one interface. A generic toy takes setVolume with a\n * percentVolume; a custom toy takes setValue with a key, as seen in a real\n * script export. Anything unrecognised is treated as a generic toy. */\nfunction setOutput(toy, percent) {\n  if (!toy) return;\n  try {\n    setOutputUnsafe(toy, percent);\n  } catch (e) {\n    console.log(\"could not drive '\" + toy + \"': \" + e +\n                \" - check it against the channels in your Script Export\");\n  }\n}\n\nfunction rampSeconds() {\n  var v = parseFloat(getVariable(\"rampMs\"));\n  if (isNaN(v) || v < 0) v = RAMP_MS;\n  return v / 1000;\n}\n\nfunction setOutputUnsafe(toy, percent) {\n  if (toy.indexOf(\"generic-custom-toy\") === 0) {\n    callAction({\n      type: \"updateComponent\",\n      channel: toy,\n      action: \"setValue\",\n      key: CUSTOM_TOY_KEY,\n      value: String(percent)\n    });\n    return;\n  }\n\n  callAction({\n    type: \"updateComponent\",\n    channel: toy,\n    action: \"setVolume\",\n    rampTime: rampSeconds(),\n    percentVolume: String(percent)\n  });\n}\n\nfunction stopAll() {\n  for (var i = 0; i < OUTS.length; i++) {\n    setOutput(OUTS[i], 0);\n  }\n}\n\n/* The trigger callback gets the whole message as trigger-<key>, so a channel\n * whose name was only typed into a Control at runtime can be read directly. */\nfunction readValue(data, name) {\n  if (!name) return null;\n  var raw = data[\"trigger-\" + name];\n  if (raw === undefined || raw === null || raw === \"\") return null;\n  var v = parseFloat(raw);\n  if (isNaN(v)) return null;\n  if (v < 0) v = 0;\n  if (v > 100) v = 100;\n  return Math.round(v);\n}\n\nfunction onAxes(data) {\n  if (halted) return;\n  for (var i = 0; i < OUTS.length; i++) {\n    var v = readValue(data, channelFor(i));\n    if (v !== null) setOutput(OUTS[i], v);\n  }\n}\n\nfunction onPause(data) {\n  halted = String(data[\"trigger-pause\"]) === \"1\";\n  if (halted) /* Seed the numeric Controls so they show real values instead of empty boxes. */\nfunction seed(name, value) {\n  var v = getVariable(name);\n  if (v === undefined || v === null || String(v) === \"\") setVariable(name, value);\n}\n\nseed(\"rampMs\", RAMP_MS);\nseed(\"skipSeconds\", 30);\n\nconsole.log(\"remote controls to add (name:type): \" + CONTROLS);\n\nstopAll();\n}\n\nfunction onHeartbeat(data) {\n  /* Liveness only. The deadman switch is the Watchdog Job - JavaScript here has\n   * no timer, and sleep() would block the interpreter. */\n}\n\n/* ------------------------------------------------------------------ remote */\n\nfunction clock(total) {\n  total = Math.max(0, Math.round(total));\n  var m = Math.floor(total / 60);\n  var sec = total % 60;\n  return m + \":\" + (sec < 10 ? \"0\" : \"\") + sec;\n}\n\nfunction onStatus(data) {\n  /* Display Controls. A Control's name is both the variable it shows and its\n   * label, so these are named for how they should read on screen: add an input\n   * Control called Scene, Elapsed, Channels or Playing and it displays that. */\n  setVariable(\"Scene\", data[\"trigger-title\"] || \"\");\n  setVariable(\"Playing\", data[\"trigger-playing\"] === \"1\" ? \"playing\" : \"paused\");\n\n  var pos = parseFloat(data[\"trigger-position\"]) || 0;\n  var dur = parseFloat(data[\"trigger-duration\"]) || 0;\n  setVariable(\"Elapsed\", clock(pos) + \" / \" + clock(dur));\n\n  /* Raw values too, for anything doing arithmetic rather than display. */\n  setVariable(\"videoPosition\", data[\"trigger-position\"] || \"0\");\n  setVariable(\"videoDuration\", data[\"trigger-duration\"] || \"0\");\n  setVariable(\"videoPercent\", dur > 0 ? Math.round((pos / dur) * 100) : 0);\n\n  /* Which channels this scene actually carries, so you can see what is worth\n   * putting in out1..outN rather than guessing. */\n  var chans = data[\"trigger-channels\"] || \"\";\n  if (chans !== lastChannels) {\n    lastChannels = chans;\n    setVariable(\"Channels\", chans);\n    console.log(\"channels in this scene: \" + (chans === \"\" ? \"(none)\" : chans));\n  }\n}\n\nvar lastChannels = null;\n\n/* Needs \"Script can send outbound messages\" ticked on the webhook connection.\n *\n * UNVERIFIED: the Action shape for an outbound webhook message is not in the\n * docs. If the buttons do nothing, use 'Add XToys Action' in the JS editor with\n * the webhook block selected to get the real JSON and fix this one function. */\nvar sendFailed = false;\n\nfunction sendToStash(msg) {\n  msg.channel = WEBHOOK;\n  try {\n    callAction(msg);\n  } catch (e) {\n    if (!sendFailed) {\n      sendFailed = true;\n      console.log(\"sending to stash failed: \" + e +\n                  \" - use 'Add XToys Action' in this editor with the webhook \" +\n                  \"block selected to get the correct JSON, then fix sendToStash()\");\n    }\n  }\n}\n\nfunction play()     { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"play\" } }); }\nfunction pause()    { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"pause\" } }); }\nfunction toggle()   { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"toggle\" } }); }\nfunction skip(secs) { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"skip\", seconds: secs } }); }\nfunction seekPct(p) { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"seek\", percent: p } }); }\n\nfunction onPlay()  { play(); }\nfunction onPause() { pause(); }\nfunction skipAmount() {\n  var v = parseFloat(getVariable(\"skipSeconds\"));\n  return isNaN(v) || v <= 0 ? 30 : v;\n}\n\nfunction onRewind()  { skip(-skipAmount()); }\nfunction onForward() { skip(skipAmount()); }\nfunction onSeek()    { seekPct(parseFloat(getVariable(\"Seek\")) || 0); }\n\n/* ---------------------------------------------------------------- dispatch */\n\n/* One trigger for everything, dispatched here on trigger-action. The callback\n * gets no way to tell which registered trigger fired, so an action-filtered\n * trigger and a bare one that fires for everything look identical - there was\n * never evidence the filtering worked. The action arrives in the data anyway. */\nfunction onMessage(data) {\n  if (!announced) {\n    announced = true;\n    var body = \"\";\n    for (var k in data) { body = body + k + \"=\" + data[k] + \"  \"; }\n    console.log(\"first message: \" + body);\n  }\n\n  var action = String(data[\"trigger-action\"] || \"\");\n  if (action === ACTION) onAxes(data);\n  else if (action === \"pause\") onPause(data);\n  else if (action === \"status\") onStatus(data);\n  else if (action === \"heartbeat\") onHeartbeat(data);\n}\n\nregisterTrigger({ type: \"componentState\", channel: WEBHOOK }, onMessage);\n\n/* A Control's name is both the variable it sets and the text shown on it, so\n * these are named for how they should read in the UI. */\nregisterTrigger({ type: \"variableChange\", variable: \"Play\" },    onPlay);\nregisterTrigger({ type: \"variableChange\", variable: \"Pause\" },   onPause);\nregisterTrigger({ type: \"variableChange\", variable: \"Rewind\" },  onRewind);\nregisterTrigger({ type: \"variableChange\", variable: \"Forward\" }, onForward);\nregisterTrigger({ type: \"variableChange\", variable: \"Seek\" },    onSeek);\n\n/* Controls the remote expects, so a missing one is obvious rather than just\n * being a button that does nothing. */\nvar CONTROLS = \"buttons: Play:push, Pause:push, Rewind:push, Forward:push, Seek:slider\" +\n               \"  |  display: Scene:input, Elapsed:input, Playing:input, Channels:input\" +\n               \"  |  advanced: skipSeconds:input, rampMs:input\";\n\n/* ------------------------------------------------------------------ report */\n\nconsole.log(\"listening on '\" + WEBHOOK + \"'\");\n\nif (OUTS.length === 0) {\n  console.log(\"TOYS is empty - set it to your toy channel names\");\n} else {\n  var summary = \"\";\n  for (var s = 0; s < OUTS.length; s++) {\n    var name = channelFor(s);\n    summary = summary + \"  \" + CONTROL_PREFIX + (s + 1) + \" (\" + OUTS[s] + \") -> \" +\n              (name === \"\" ? \"(unset)\" : name) + \"\\n\";\n  }\n  console.log(\"output mapping:\\n\" + summary);\n}\n\nstopAll();\n"
+  "customFunctions": "/* Funscript Axis Router - XToys side\n *\n * Paste into the XToys JavaScript editor: open the Script, then the JS button\n * in the top toolbar.\n *\n * Setup:\n *   1. Connect a Webhook block and one toy per output, then set WEBHOOK and\n *      TOYS below from the channels: {} section of your Script Export.\n *   2. Add input Controls named out1, out2, ... one per output.\n *   3. Type a funscript channel name into each. The Channels Control lists\n *      what the current scene actually carries.\n *\n * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow\n * functions, no template literals, no anonymous nested functions, no DOM.\n */\n\n/* ------------------------------------------------------------------ config */\n\n/* Channel names are NOT discovered. getConnectedBlocks() returns an object\n * keyed by channel in one script and a plain array in another, will not\n * marshal through the interpreter, and calling callAction() with a channel\n * that does not exist crashes XToys internally. Set these by hand. */\nvar WEBHOOK = \"webhook-a\";\nvar TOYS = \"generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h\";\n\nvar ACTION = \"axes\";        /* must match the plugin's Action Name setting */\nvar RAMP_MS = 100;          /* fallback when the rampMs Control is empty */\nvar SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */\nvar CUSTOM_TOY_KEY = \"a\";   /* key a custom toy's setValue writes to */\nvar CONTROL_PREFIX = \"out\"; /* Controls out1, out2, ... hold channel names */\n\nvar OUTS = TOYS === \"\" ? [] : TOYS.split(\",\");\n\n/* --------------------------------------------------------------- internals */\n\nvar halted = false;\nvar announced = false;\nvar lastChannels = null;\nvar sendFailed = false;\n\nfunction numVar(name, fallback) {\n  var v = parseFloat(getVariable(name));\n  return isNaN(v) || v < 0 ? fallback : v;\n}\n\n/* Read live so editing a Control takes effect without reloading the script. */\nfunction channelFor(i) {\n  var v = getVariable(CONTROL_PREFIX + (i + 1));\n  if (v === undefined || v === null) return \"\";\n  return String(v);\n}\n\n/* Toy types do not share one interface: a generic toy takes setVolume with a\n * percentVolume, a custom toy takes setValue with a key. */\nfunction driveToy(toy, percent) {\n  if (toy.indexOf(\"generic-custom-toy\") === 0) {\n    callAction({\n      type: \"updateComponent\",\n      channel: toy,\n      action: \"setValue\",\n      key: CUSTOM_TOY_KEY,\n      value: String(percent)\n    });\n    return;\n  }\n\n  callAction({\n    type: \"updateComponent\",\n    channel: toy,\n    action: \"setVolume\",\n    rampTime: numVar(\"rampMs\", RAMP_MS) / 1000,\n    percentVolume: String(percent)\n  });\n}\n\nfunction setOutput(toy, percent) {\n  if (!toy) return;\n  try {\n    driveToy(toy, percent);\n  } catch (e) {\n    console.log(\"could not drive '\" + toy + \"': \" + e +\n                \" - check it against the channels in your Script Export\");\n  }\n}\n\nfunction stopAll() {\n  for (var i = 0; i < OUTS.length; i++) {\n    setOutput(OUTS[i], 0);\n  }\n}\n\n/* --------------------------------------------------------------- messages */\n\n/* The callback receives the whole message as trigger-<key>, so a channel whose\n * name was only typed into a Control at runtime can be read directly. */\nfunction readValue(data, name) {\n  if (!name) return null;\n  var raw = data[\"trigger-\" + name];\n  if (raw === undefined || raw === null || raw === \"\") return null;\n  var v = parseFloat(raw);\n  if (isNaN(v)) return null;\n  if (v < 0) v = 0;\n  if (v > 100) v = 100;\n  return Math.round(v);\n}\n\nfunction onAxes(data) {\n  if (halted) return;\n  for (var i = 0; i < OUTS.length; i++) {\n    var v = readValue(data, channelFor(i));\n    if (v !== null) setOutput(OUTS[i], v);\n  }\n}\n\nfunction onPauseMessage(data) {\n  halted = String(data[\"trigger-pause\"]) === \"1\";\n  if (halted) stopAll();\n}\n\nfunction onHeartbeat(data) {\n  /* Liveness only. The deadman switch is the Watchdog Job: JavaScript here has\n   * no timer, and sleep() would block the interpreter. */\n}\n\nfunction clock(total) {\n  total = Math.max(0, Math.round(total));\n  var m = Math.floor(total / 60);\n  var sec = total % 60;\n  return m + \":\" + (sec < 10 ? \"0\" : \"\") + sec;\n}\n\n/* A Control reflects its variable and is labelled with its own name, so adding\n * an input Control called Scene, Elapsed, Playing or Channels displays it. */\nfunction onStatus(data) {\n  setVariable(\"Scene\", data[\"trigger-title\"] || \"\");\n  setVariable(\"Playing\", data[\"trigger-playing\"] === \"1\" ? \"playing\" : \"paused\");\n\n  var pos = parseFloat(data[\"trigger-position\"]) || 0;\n  var dur = parseFloat(data[\"trigger-duration\"]) || 0;\n  setVariable(\"Elapsed\", clock(pos) + \" / \" + clock(dur));\n\n  /* raw values, for anything doing arithmetic rather than display */\n  setVariable(\"videoPosition\", data[\"trigger-position\"] || \"0\");\n  setVariable(\"videoDuration\", data[\"trigger-duration\"] || \"0\");\n  setVariable(\"videoPercent\", dur > 0 ? Math.round((pos / dur) * 100) : 0);\n\n  var chans = data[\"trigger-channels\"] || \"\";\n  if (chans !== lastChannels) {\n    lastChannels = chans;\n    setVariable(\"Channels\", chans);\n    console.log(\"channels in this scene: \" + (chans === \"\" ? \"(none)\" : chans));\n  }\n}\n\n/* ------------------------------------------------------------------ remote */\n\n/* Needs \"Script can send outbound messages\" ticked on the webhook connection.\n *\n * UNVERIFIED: the Action shape for an outbound webhook message is not\n * documented. If the buttons do nothing, use 'Add XToys Action' in this editor\n * with the webhook block selected and correct this one function. */\nfunction sendToStash(msg) {\n  msg.channel = WEBHOOK;\n  try {\n    callAction(msg);\n  } catch (e) {\n    if (!sendFailed) {\n      sendFailed = true;\n      console.log(\"sending to stash failed: \" + e +\n                  \" - use 'Add XToys Action' with the webhook block selected \" +\n                  \"to get the correct JSON, then fix sendToStash()\");\n    }\n  }\n}\n\nfunction send(action, extra) {\n  var data = { action: action };\n  if (extra) {\n    for (var k in extra) { data[k] = extra[k]; }\n  }\n  sendToStash({ type: \"updateComponent\", action: \"send\", data: data });\n}\n\n/* Button handlers. Named distinctly from the message handlers above - onPause\n * previously meant both, which silently broke pause handling. */\nfunction onPlayButton()    { send(\"play\"); }\nfunction onPauseButton()   { send(\"pause\"); }\nfunction onRewindButton()  { send(\"skip\", { seconds: -numVar(\"skipSeconds\", SKIP_SECONDS) }); }\nfunction onForwardButton() { send(\"skip\", { seconds: numVar(\"skipSeconds\", SKIP_SECONDS) }); }\nfunction onSeekControl()   { send(\"seek\", { percent: numVar(\"Seek\", 0) }); }\n\n/* ---------------------------------------------------------------- dispatch */\n\n/* One trigger for everything, dispatched on trigger-action. The callback is\n * given no way to tell which registered trigger fired, so an action-filtered\n * trigger and a bare one that fires for everything are indistinguishable.\n * Dispatching here needs no assumption and cannot double-fire. */\nfunction onMessage(data) {\n  if (!announced) {\n    announced = true;\n    var body = \"\";\n    for (var k in data) { body = body + k + \"=\" + data[k] + \"  \"; }\n    console.log(\"first message: \" + body);\n  }\n\n  /* Feeds the Watchdog Job, which is the deadman switch: JavaScript has no\n   * timer, so the Job counts up and this resets it on every message. If the\n   * browser goes away the Job drives everything to zero. */\n  setVariable(\"lastBeat\", 0);\n\n  var action = String(data[\"trigger-action\"] || \"\");\n  if (action === ACTION) onAxes(data);\n  else if (action === \"pause\") onPauseMessage(data);\n  else if (action === \"status\") onStatus(data);\n  else if (action === \"heartbeat\") onHeartbeat(data);\n}\n\nregisterTrigger({ type: \"componentState\", channel: WEBHOOK }, onMessage);\n\n/* A Control's name is both its variable and its on-screen label. */\nregisterTrigger({ type: \"variableChange\", variable: \"Play\" },    onPlayButton);\nregisterTrigger({ type: \"variableChange\", variable: \"Pause\" },   onPauseButton);\nregisterTrigger({ type: \"variableChange\", variable: \"Rewind\" },  onRewindButton);\nregisterTrigger({ type: \"variableChange\", variable: \"Forward\" }, onForwardButton);\nregisterTrigger({ type: \"variableChange\", variable: \"Seek\" },    onSeekControl);\n\n/* ------------------------------------------------------------------ report */\n\nfunction seed(name, value) {\n  var v = getVariable(name);\n  if (v === undefined || v === null || String(v) === \"\") setVariable(name, value);\n}\n\nseed(\"rampMs\", RAMP_MS);\nseed(\"skipSeconds\", SKIP_SECONDS);\nseed(\"watchdogMs\", 3000);\n\nconsole.log(\"listening on '\" + WEBHOOK + \"'\");\n\nif (OUTS.length === 0) {\n  console.log(\"TOYS is empty - set it to your toy channel names\");\n} else {\n  var summary = \"\";\n  for (var s = 0; s < OUTS.length; s++) {\n    var mapped = channelFor(s);\n    summary = summary + \"  \" + CONTROL_PREFIX + (s + 1) + \" (\" + OUTS[s] + \") -> \" +\n              (mapped === \"\" ? \"(unset)\" : mapped) + \"\\n\";\n  }\n  console.log(\"output mapping:\\n\" + summary);\n}\n\nconsole.log(\"controls: Scene, Elapsed, Playing, Channels (display) | \" +\n            \"out1..\" + OUTS.length + \" (routing) | \" +\n            \"Play, Pause, Rewind, Forward (push), Seek (slider) | \" +\n            \"skipSeconds, rampMs, watchdogMs (advanced)\");\n\nstopAll();\n"
 }
