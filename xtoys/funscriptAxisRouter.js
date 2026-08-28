@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "b7014d6b";             /* content hash, stamped by stamp.mjs */
+var BUILD = "65440561";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -303,15 +303,12 @@ function onMessage(data) {
 
 registerTrigger({ type: "componentState", channel: WEBHOOK, action: "*" }, onMessage);
 
-/* A Control's `id` is the variable it reads and writes; `name` is only its
- * label. A Control with just a name binds to an auto-generated id instead, so
- * these ids are what matter and the labels are free to read nicely. */
-registerTrigger({ type: "variableChange", variable: "Play" },    onPlayButton);
-registerTrigger({ type: "variableChange", variable: "Pause" },   onPauseButton);
-registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewindButton);
-registerTrigger({ type: "variableChange", variable: "Forward" }, onForwardButton);
-registerTrigger({ type: "variableChange", variable: "Seek" },    onSeekControl);
-registerTrigger({ type: "variableChange", variable: "Speed" },   onSpeedControl);
+/* The buttons are NOT wired up here. A variableChange trigger registered from
+ * JavaScript never fires when a Control changes - pressing Play produced no log
+ * line at all, not even the trigger firing. Block-level globalTriggers in the
+ * manifest do work, so each Control has one, and its customCode calls the
+ * matching function above. That is the pattern the one public XToys
+ * integration uses, and the only one observed to work. */
 
 /* ------------------------------------------------------------------ report */
 

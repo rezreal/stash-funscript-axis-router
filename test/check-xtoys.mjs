@@ -57,8 +57,11 @@ const standalone = fs.readFileSync("xtoys/funscriptAxisRouter.js", "utf8");
 console.log("xtoys/xtoys-script.json");
 if (!embedded || embedded.length < 1000) {
   fail("manifest", "customFunctions is missing or truncated");
-} else if (manifest.globalTriggers.length > 0) {
-  fail("manifest", "has block triggers as well as JS - every output would fire twice");
+} else if (manifest.globalTriggers.some((t) => t.type === "componentState")) {
+  // the axes path is registered from JS; a block trigger too would double-drive
+  fail("manifest", "has componentState block triggers as well as JS - outputs would fire twice");
+} else if (manifest.globalTriggers.length === 0) {
+  fail("manifest", "no button triggers - JS-registered variableChange does not fire");
 } else if (embedded.split("\n").length !== standalone.split("\n").length) {
   fail("manifest", "customFunctions has drifted from funscriptAxisRouter.js");
 } else {
