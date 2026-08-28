@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import { buildHash } from "../xtoys/stamp.mjs";
 
-const FILES = ["xtoys/funscriptAxisRouter.js", "xtoys/diagnostic.js"];
+const FILES = ["xtoys/funscriptAxisRouter.js", "xtoys/diagnostic.js", "xtoys/control-test.js"];
 let failures = 0;
 
 function fail(file, msg) {
