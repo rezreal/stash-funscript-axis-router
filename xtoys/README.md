@@ -18,37 +18,30 @@ name.
 ## The JavaScript route
 
 XToys scripts can run custom JavaScript — the **JS** button in the toolbar while
-editing a Script. That sidesteps the import problem completely: paste
+editing a Script. That sidesteps importing entirely: paste
 `funscriptAxisRouter.js`, edit the `OUTPUTS` list at the top, done.
 
-It is also simply better suited. `registerTrigger(json, fn)` hands the callback
-*the whole message* as `trigger-<key>`, so a channel whose name you only typed in
-at runtime can be read directly — no static binding to work around. The
-`payload` field the plugin sends is only needed for the block-and-trigger route.
+It is also better suited to the job. `registerTrigger(json, fn)` hands the
+callback *the whole message* as `trigger-<key>`, so a channel whose name you only
+typed in at runtime can be read directly, with no static binding to work around.
+The `payload` field the plugin sends exists only for the block-and-trigger route.
 
 Constraints, from the [JS docs](https://guide.xtoys.app/script-creation/javascript.html):
-**ES5 only**, run under JS-Interpreter, no DOM, and slower than native actions.
-The available helpers are `getVariable`, `setVariable`, `callAction`,
+**ES5 only**, run under JS-Interpreter, no DOM, slower than native actions. The
+helpers available are `getVariable`, `setVariable`, `callAction`,
 `registerTrigger`, `getXhr`, `getConnectedBlocks`, `sleep` and `console.log`.
 
-There is no timer, and `sleep()` would block the interpreter, so the **watchdog
-has to be a Job** — see below.
+There is no timer and `sleep()` would block the interpreter, so the watchdog has
+to be a Job — see [Building it by hand](#building-it-by-hand).
 
-## Is this file importable?
+## Importing the JSON
 
-**Probably not, and you should treat it as a blueprint rather than a file to
-load.** The XToys guide documents loading scripts from *My Scripts* and *Public
-Scripts*, and saving a public script to your own collection — but no JSON import
-anywhere. The one public integration that ships an `xtoys_script.json`
-(Bondage Club) does not tell people to import it either; it points them at a
-published script URL and says *Load Script*. The JSON in that repo is a
-reference copy.
-
-So unless the editor has an undocumented import — worth a look, and do say if you
-find one — the practical path is to build the script once in the XToys editor
-using **[Building it by hand](#building-it-by-hand)** below, then publish it and
-share the link. This JSON stays useful as the exact specification of what to
-build, and as something to diff against later.
+There does not appear to be a way. The guide documents loading scripts from *My
+Scripts* and *Public Scripts* and saving a public script to your collection, but
+no JSON import. The one public integration shipping an `xtoys_script.json`
+(Bondage Club) points people at a published script URL instead; its JSON is a
+reference copy. Ours is the same — a specification, not a file to load. Say so if
+you find an import in the editor and this changes.
 
 ## Where messages come in
 
@@ -56,98 +49,102 @@ From the [Webhook tool docs](https://guide.xtoys.app/tools/webhook.html):
 
 - A webhook accepts **GET**, **POST** or **WebSocket**. WebSocket is the one to
   use here, and the docs describe it as suited to continuous exchange.
-- **Every message must have an `action` key.** This is not optional, which is why
-  the plugin sends one and why leaving *XToys Action Name* blank is only valid
-  for a custom toy, never for a webhook.
-- The script receives the `action` value plus every other key/value pair, exposed
-  to connected actions as `{trigger-<key>}` variables that are destroyed once
-  those actions finish.
+- **Every message must have an `action` key.** Not optional — which is why the
+  plugin sends one, and why leaving *XToys Action Name* blank is valid only for a
+  custom toy, never a webhook.
+- The script gets the `action` value plus every other key/value pair, exposed to
+  connected actions as `{trigger-<key>}` and destroyed once they finish.
 - A **private** webhook needs only its Webhook ID. A **shared** webhook also
   needs `Authorization: Bearer <token>`.
 
-The auth token being a header is the awkward part, since a browser cannot set
-headers on a WebSocket — the plugin sends it as `?token=` instead, which is what
-`knock-rod` does successfully. A **private** webhook avoids the question
-entirely, so prefer one.
+The token being a header is awkward, since a browser cannot set headers on a
+WebSocket — the plugin sends `?token=` instead, which is what `knock-rod` does
+successfully. A **private** webhook avoids the question entirely, so prefer one.
 
-No rate limits are documented. If axis updates arrive throttled, lower the
-plugin's *Update Rate (Hz)* before assuming anything else is wrong.
+No rate limits are documented. If updates arrive throttled, lower the plugin's
+*Update Rate (Hz)* before assuming anything else is wrong.
 
-## Setup## Setup## Setup
+### Using a custom toy instead
 
-1. Import `funscriptAxisRouter.xtoys.json` into XToys.
-2. Open the script's **Webhook** block and copy the webhook ID into the stash
-   plugin's *XToys Webhook ID* setting.
-3. Connect a device to each **Generic** output you want to use.
-4. In the script config, type a funscript channel name into **Output N channel** —
-   `roll`, `pitch`, `e-stim`, whatever your script actually contains. Leave a box
-   empty to leave that output alone. Matching is case-insensitive.
-5. Press play in stash. The browser console lists the channels being routed if
+**Confirmed from a real export:** a custom toy appears in a script's `channels`
+map as
+
+```json
+"generic-custom-toy-b": { "name": "stash", "type": "generic-custom-toy" }
+```
+
+so it can be a script channel. For the JSON route, uncomment the two lines near
+the top of `build-xtoys-script.py` and match the letter suffix to your slot; for
+the JS route, change `WEBHOOK` at the top of `funscriptAxisRouter.js`.
+
+Custom toys are driven with `action: "setValue"` and a `key`, not the
+`setVolume`/`percentVolume` that generic toys use — so pointing an *output* at
+one changes the action shape too.
+
+Still unverified is the direction that actually matters: whether a custom toy
+receiving JSON fires a script trigger carrying `trigger-<key>` data the way a
+Webhook block does. If it does not, the Webhook block is the only inbound route.
+
+## Setup
+
+1. Add a **Webhook** tool and connect it to the script. Add one **Generic** toy
+   per output you want.
+2. Copy the Webhook ID into the plugin's *XToys Webhook ID* setting.
+3. Paste `funscriptAxisRouter.js` into the JS editor and edit `OUTPUTS`, or build
+   the blocks by hand as below.
+4. Press play in stash. The browser console lists the channels being routed if
    you are unsure what a file contains.
-
-## Config
-
-| Control | Default | Meaning |
-|---|---|---|
-| Output 1–8 channel | empty | Funscript channel this output follows. Empty = unused. |
-| Ramp (ms) | `100` | Smoothing between updates. Roughly one update interval is a good start. |
-| Heartbeat timeout (ms) | `3000` | Outputs stop if no message arrives for this long. Keep it 2–3× the plugin's heartbeat interval. |
 
 ## What it reacts to
 
-Three triggers, matching the `action` field the plugin sends:
+Three triggers, matching the `action` the plugin sends:
 
-- **`axes`** — parses the `payload` field and sets each mapped output.
-- **`pause`** — `1` zeroes every output and holds them there, `0` releases.
-- **`heartbeat`** — resets the watchdog.
-
-The `Watchdog` job counts up every 500 ms and is reset by any incoming message.
-If it passes the timeout, every output is driven to zero — that is what protects
-you if the browser tab crashes or the network drops.
-
-## Why `payload` rather than the flat keys
-
-The plugin sends both. An XToys trigger binds incoming keys statically, as
-`trigger-<key>`, which cannot express "read whatever channel the user typed into
-a config box". So the plugin repeats the whole channel map as one JSON string
-under `payload`, and the script parses that and indexes it by the configured
-names. The flat keys are still there for custom toys and simpler scripts.
+- **`axes`** — sets each mapped output.
+- **`pause`** — `1` zeroes every output and holds, `0` releases.
+- **`heartbeat`** — liveness for the watchdog.
 
 ## Building it by hand
 
-The generated JSON describes exactly this. Build it once in the editor:
+The JSON describes exactly this.
 
-**Blocks** — add a *Webhook* tool and connect it to the script. Add eight
-*Generic (1 output)* toys, or however many you need.
+**Blocks** — a *Webhook* tool, plus eight *Generic (1 output)* toys.
 
-**Controls** — eight textboxes `channel1` … `channel8` (labelled "Output N
-channel"), plus `rampMs` (default `100`) and `watchdogMs` (default `3000`).
+**Controls** — a Control's name *is* the variable it sets, so add inputs named
+`channel1` … `channel8`, plus `rampMs` (`100`) and `watchdogMs` (`3000`).
 
-**Variables, at script start** — `out1` … `out8` to `0`, `halted` to `0`,
-`lastBeat` to `0`, and start the `Watchdog` job.
+**At script start** — `out1` … `out8` to `0`, `halted` to `0`, `lastBeat` to `0`,
+and start the `Watchdog` job.
 
-**Trigger, action `axes`** — a Custom Code action with `{trigger-payload}` and
-the eight channel variables bound, holding the `pick`/`setVariables` code from
-the generated JSON. Follow it with eight *setVolume* actions, output N taking
-`{outN}` with ramp `{rampMs}/1000`, each conditional on `{outN} >= 0 && {halted} == 0`.
+**Trigger, action `axes`** — a Custom Code action binding `{trigger-payload}` and
+the eight channel variables, holding the `pick` / `setVariable` code from the
+JSON. Then eight *setVolume* actions, output N taking `{outN}` with ramp
+`{rampMs}/1000`, each conditional on `{outN} >= 0 && {halted} == 0`.
 
-**Trigger, action `pause`** — set `halted` to `{trigger-pause}`, and when it is
-`1`, setVolume `0` on every output.
+**Trigger, action `pause`** — set `halted` to `{trigger-pause}`; when it is `1`,
+setVolume `0` on every output.
 
 **Trigger, action `heartbeat`** — reset `lastBeat` to `0`.
 
-**Job `Watchdog`** — a 0.5 s timer that adds 500 to `lastBeat`, and drives every
-output to `0` once `{lastBeat} > {watchdogMs}`. Every trigger above also resets
-`lastBeat`, so it only fires when messages genuinely stop.
+**Job `Watchdog`** — a 0.5 s timer adding 500 to `lastBeat`, driving every output
+to `0` once `{lastBeat} > {watchdogMs}`. Every trigger resets `lastBeat`, so it
+fires only when messages genuinely stop.
 
 **On script stop** — setVolume `0` on every output.
 
+## Why `payload` rather than the flat keys
+
+For the block-and-trigger route only. An XToys trigger binds incoming keys
+statically as `trigger-<key>`, which cannot express "read whatever channel the
+user typed into a config box", so the plugin repeats the whole channel map as one
+JSON string under `payload` for a Custom Code action to parse and index by name.
+The JS route does not need this — `registerTrigger` passes the whole map. Flat
+keys remain for custom toys and simpler scripts.
+
 ## Adapting it
 
-The generated outputs are `generic-1-a` … `generic-1-h`. If you want a different
-device type, change the `channels` entries and the `updateComponent` actions to
-match — `setVolume`/`percentVolume` is the generic single-value interface.
+Outputs are `generic-1-a` … `generic-1-h`. For a different device type, change
+the `channels` entries and the `updateComponent` actions to match;
+`setVolume`/`percentVolume` is the generic single-value interface.
 
-`funscriptAxisRouter.xtoys.json` is generated by `build-xtoys-script.py`, so if
-you change the number of outputs, edit `N` there and regenerate rather than
-hand-editing the JSON.
+`funscriptAxisRouter.xtoys.json` is generated by `build-xtoys-script.py` — change
+`N` there and regenerate rather than hand-editing the JSON.
