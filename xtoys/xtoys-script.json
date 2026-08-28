@@ -149,6 +149,36 @@
                   "rampTime": "0.1",
                   "percentVolume": "0",
                   "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateVariable",
+                  "variable": "Playing",
+                  "value": "disconnected",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateVariable",
+                  "variable": "Scene",
+                  "value": "",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateVariable",
+                  "variable": "Elapsed",
+                  "value": "",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateVariable",
+                  "variable": "Rate",
+                  "value": "",
+                  "condition": "{lastBeat} > {watchdogMs}"
+                },
+                {
+                  "type": "updateVariable",
+                  "variable": "Channels",
+                  "value": "",
+                  "condition": "{lastBeat} > {watchdogMs}"
                 }
               ]
             }
@@ -201,27 +231,27 @@
   "controls": [
     {
       "id": "Scene",
-      "name": "Scene",
+      "name": "Scene (reported)",
       "type": "input"
     },
     {
       "id": "Elapsed",
-      "name": "Elapsed",
+      "name": "Elapsed (reported)",
       "type": "input"
     },
     {
       "id": "Rate",
-      "name": "Rate",
+      "name": "Rate (reported)",
       "type": "input"
     },
     {
       "id": "Playing",
-      "name": "Playing",
+      "name": "State (reported)",
       "type": "input"
     },
     {
       "id": "Channels",
-      "name": "Channels in scene",
+      "name": "Channels (reported)",
       "type": "input"
     },
     {

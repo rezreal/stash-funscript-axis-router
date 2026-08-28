@@ -26,6 +26,18 @@ the stamp and the content disagree.
 > to end. The remote buttons are not: the outbound Action shape comes from
 > `Add XToys Action` but has never been seen to arrive.
 
+## The display Controls are editable
+
+XToys has no read-only Control type — the documented set is Text Input, sliders,
+Dropdown, Button group, Toggle and Push button — so the reported fields (Scene,
+Elapsed, Rate, State, Channels) are text inputs and you *can* type into them.
+Nothing reads them back, and the script rewrites them on every status message,
+so an edit is overwritten within about a second.
+
+They are labelled *(reported)* to make the distinction visible, and the Watchdog
+Job clears them when the stash side stops sending — otherwise a scene title
+would sit there implying something is still playing.
+
 ## Controls bind by `id`, not by name
 
 A Control's **`id`** is the variable it reads and writes; **`name`** is only its
