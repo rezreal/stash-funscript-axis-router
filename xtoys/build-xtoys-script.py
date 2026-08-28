@@ -10,6 +10,16 @@ import os
 
 N = 8
 LETTERS = "abcdefgh"
+
+# Where messages arrive. The default is a Webhook block living inside the
+# script: its ID is the only credential, so no token is involved.
+#
+# If you would rather feed the script from a custom webhook toy you already
+# created at xtoys.app/me/custom-toys, point these at it instead. The type
+# string has to match whatever XToys calls that toy in a script export - export
+# a script with the toy attached and copy the name out of its "channels" map.
+INPUT_CHANNEL = "webhook-a"
+INPUT_CHANNEL_DEF = {"type": "webhook", "outbound": False, "hideWebhookInfo": False}
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "funscriptAxisRouter.xtoys.json")
 
 
@@ -30,7 +40,7 @@ def set_volume(i, percent, ramp, condition=None):
     return a
 
 
-channels = {"webhook-a": {"type": "webhook", "outbound": False, "hideWebhookInfo": False}}
+channels = {INPUT_CHANNEL: dict(INPUT_CHANNEL_DEF)}
 for i in range(1, N + 1):
     channels[generic(i)] = {"name": None, "type": "generic-1"}
 
@@ -86,7 +96,7 @@ apply_vars += [
 
 axes_trigger = {
     "type": "componentState",
-    "channel": "webhook-a",
+    "channel": INPUT_CHANNEL,
     "action": "axes",
     "parsedAction": "axes",
     "actions": [
@@ -107,7 +117,7 @@ axes_trigger = {
 
 pause_trigger = {
     "type": "componentState",
-    "channel": "webhook-a",
+    "channel": INPUT_CHANNEL,
     "action": "pause",
     "parsedAction": "pause",
     "variables": [{"name": "paused", "value": "trigger-pause", "expression": None}],
@@ -120,7 +130,7 @@ pause_trigger = {
 
 heartbeat_trigger = {
     "type": "componentState",
-    "channel": "webhook-a",
+    "channel": INPUT_CHANNEL,
     "action": "heartbeat",
     "parsedAction": "heartbeat",
     "actions": [{"type": "updateVariable", "variable": "lastBeat", "value": "0"}],

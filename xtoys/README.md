@@ -10,6 +10,31 @@ funscript channel you name.
 > right, but treat it as a draft to fix up in the XToys editor rather than
 > something known to work. Please report what needed changing.
 
+## Where messages come in
+
+The script declares one input channel. By default that is a **Webhook block
+inside the script**:
+
+```json
+"webhook-a": { "type": "webhook", "outbound": false }
+```
+
+Its webhook ID is the only credential — **no token needed**, so you can leave the
+plugin's *XToys Token* blank. This is the arrangement the script was built
+around, and the one there is a known-good example of.
+
+### Using your custom webhook toy instead
+
+If you would rather feed the script from a custom toy you already created at
+`xtoys.app/me/custom-toys` (the kind that gives you an ID *and* a token), edit
+`INPUT_CHANNEL` / `INPUT_CHANNEL_DEF` at the top of `build-xtoys-script.py` and
+regenerate. Everything else — the triggers, the outputs, the watchdog — follows
+automatically.
+
+You will need the `type` string XToys uses for that toy in a script, which is not
+documented anywhere I could find. To get it: build a throwaway script in XToys
+with the toy attached, export it, and read the name out of its `channels` map.
+
 ## Setup
 
 1. Import `funscriptAxisRouter.xtoys.json` into XToys.
