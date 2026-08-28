@@ -628,7 +628,16 @@
     // stash gates the whole interactive pipeline on a non-empty handyKey (see
     // context.tsx uploadScript and ScenePlayer's `interactiveClient.handyKey`
     // check), so when there is no Handy we hand it a sentinel.
-    this.fallbackKey = handy ? "" : PLUGIN_ID;
+    //
+    // It has to *change* on each configure() rather than just be non-empty.
+    // context.tsx only calls initialise() when the key differs from what it was
+    // before the call - a constant sentinel never trips that, so nothing ever
+    // initialises and no script is ever uploaded. And initialise() reads
+    // serverOffset from a stale closure, so the first call only syncs and the
+    // second is the one that connects. Changing the key until connect() lands
+    // gets both calls; after that it settles and stops re-initialising.
+    this.fallbackKey = "";
+    this.keySeq = 0;
     this.up = false;
   }
 
@@ -657,6 +666,7 @@
     var self = this;
     return Promise.resolve(this.handy ? this.handy.connect() : null).then(function () {
       self.up = true;
+      console.log(LOG, "interactive client ready");
     });
   };
 
@@ -669,12 +679,17 @@
   };
 
   RouterClient.prototype.configure = function (c) {
+    if (!this.handy && !this.up) {
+      this.keySeq++;
+      this.fallbackKey = PLUGIN_ID + "-" + this.keySeq;
+    }
     return Promise.resolve(this.handy ? this.handy.configure(c) : undefined);
   };
 
   RouterClient.prototype.uploadScript = function (url, apiKey) {
     var self = this;
     this.runner.stop();
+    console.log(LOG, "loading", url);
 
     if (this.remote) {
       this.remote.setScene(url);
@@ -866,6 +881,12 @@
         console.log(LOG, "remote control enabled - XToys can drive this player");
       }
     }
+
+    // Connect as soon as the plugin loads rather than waiting for a scene.
+    // stash's interactive pipeline has to initialise before uploadScript is
+    // ever called, and that is a long chain to be silently stuck in - an open
+    // socket is something you can actually see.
+    if (cfg.xtoysWebhookId) sink.open();
 
     return new RouterClient(handy, runner, remote);
   };

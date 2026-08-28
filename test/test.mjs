@@ -183,7 +183,9 @@ console.log("\npause");
 console.log("\nno-handy operation");
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 }, {});
-  eq("sentinel handyKey non-empty", e.client.handyKey, "funscriptAxisRouter");
+  eq("handyKey starts empty, like the real client", e.client.handyKey, "");
+  await e.client.configure({ connectionKey: "" });
+  ok("configure makes it non-empty", e.client.handyKey.indexOf("funscriptAxisRouter") === 0, e.client.handyKey);
   eq("sync never returns 0", await e.client.sync(), 1);
   await e.client.connect();
   eq("connected after connect", e.client.connected, true);
@@ -330,7 +332,8 @@ console.log("\nstroke axis owner (checkbox)");
   eq("on: Handy never constructed", on.handyBuilt.n, 0);
   eq("on: stroke routed alongside the rest", Object.keys(on.sent[on.sent.length-1]).sort(),
      ["pitch","roll","stroke"]);
-  eq("on: sentinel key so the pipeline runs", on.client.handyKey, "funscriptAxisRouter");
+  await on.client.configure({ connectionKey: "" });
+  ok("on: sentinel key so the pipeline runs", on.client.handyKey.indexOf("funscriptAxisRouter") === 0, on.client.handyKey);
 
   // off + Handy: delegated, stroke withheld
   const off = await run({ routeStrokeAxis: false }, mkHandy());
@@ -612,6 +615,55 @@ console.log("\nremote control");
   sock.onmessage({ data: JSON.stringify({ action: "axes", roll: "10" }) });
   sock.onmessage({ data: "garbage" });
   eq("unknown and malformed commands are inert", on.calls, []);
+}
+
+
+// ---- 26. stash initialisation handshake ---------------------------------
+// Replays what context.tsx actually does. Without this the plugin looked fine
+// in every other test and still never opened a socket in the real app.
+console.log("\nstash initialisation handshake");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  const c = e.client;
+
+  // context.tsx: const oldKey = interactive.handyKey; await configure(...);
+  //              if (oldKey !== interactive.handyKey && interactive.handyKey) initialise();
+  async function configurePass() {
+    const oldKey = c.handyKey;
+    await c.configure({ connectionKey: "", offset: 0 });
+    return oldKey !== c.handyKey && !!c.handyKey;
+  }
+
+  ok("first configure triggers initialise", await configurePass());
+
+  // initialise() run 1: serverOffset is 0, so it syncs and returns without connecting
+  const offset = await c.sync();
+  ok("sync returns a truthy offset", !!offset, offset);
+
+  // config changed -> the effect runs again
+  ok("second configure triggers initialise again", await configurePass());
+
+  // initialise() run 2: serverOffset is set now, so this one connects
+  await c.connect();
+  eq("client reports connected", c.connected, true);
+
+  // and once connected the key settles, so it stops re-initialising forever
+  const settled = c.handyKey;
+  await c.configure({ connectionKey: "", offset: 0 });
+  eq("key stops changing once connected", c.handyKey, settled);
+  ok("settled key is still non-empty", !!c.handyKey);
+}
+{
+  // the socket must exist before any scene is loaded
+  const e = makeEnv(V2, { xtoysWebhookId: "abc" });
+  await new Promise(r => setTimeout(r, 5));
+  ok("socket opens as soon as the plugin loads", e.conns.length > 0, e.conns);
+  eq("connects to the configured webhook", e.conns[0].url, "wss://webhook.xtoys.app/abc");
+}
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "" });
+  await new Promise(r => setTimeout(r, 5));
+  eq("no webhook id means no socket", e.conns.length, 0);
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");

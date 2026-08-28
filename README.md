@@ -225,6 +225,35 @@ public, enable Pages under Settings > Pages with **Source: GitHub Actions**, and
 push. `https://<user>.github.io/<repo>/index.yml` is then the source URL users
 add under Settings > Plugins > Available Plugins > Add Source.
 
+## Troubleshooting
+
+Open the browser console. The plugin logs on load, and each stage after it:
+
+```
+[funscript-axis-router] installed; ...
+[funscript-axis-router] XToys socket open
+[funscript-axis-router] XToys acknowledged the connection   (only with a token)
+[funscript-axis-router] interactive client ready
+[funscript-axis-router] loading http://.../scene/42/funscript
+[funscript-axis-router] routing 3 axis/axes: roll, pitch, stroke
+```
+
+**No "XToys socket open" at all.** The socket is opened as soon as the plugin
+loads, so this means the plugin did not load or has no webhook ID. Check it
+appears in Settings > Plugins, that *XToys Webhook ID* is set, and that
+Settings > Interface does not have customizations disabled.
+
+**Socket opens, then closes repeatedly.** Wrong webhook ID, or a shared webhook
+whose token is not being accepted. Prefer a private webhook.
+
+**Socket open but no "loading …".** stash never called the plugin, so nothing is
+routed. The scene needs a `.funscript` beside the video, or `scene.interactive`
+is false and the player never engages the interactive client at all.
+
+**"loading" but "routing 0 axis/axes".** The file has no auxiliary axes — a v1.0
+funscript is stroke only. With a Handy configured the stroke axis is withheld
+too; tick *Route Stroke Axis Here* if you want it.
+
 ## Notes on stash internals
 
 Three things this plugin works around, all in `ui/v2.5/src/hooks/Interactive/`:
@@ -232,6 +261,13 @@ Three things this plugin works around, all in `ui/v2.5/src/hooks/Interactive/`:
 - `handyKey` must be non-empty or `context.tsx`'s `uploadScript` and
   ScenePlayer's readiness check both bail. Without a Handy we return the plugin
   id as a sentinel.
+- `handyKey` must *change* during `configure()`, not merely be non-empty.
+  `context.tsx` calls `initialise()` only when the key differs from what it was
+  before the call, so a constant sentinel means nothing ever initialises and no
+  script is ever uploaded. It also has to change twice: `initialise()` reads
+  `serverOffset` from a stale closure, so the first call only syncs and the
+  second is the one that reaches `connect()`. We vary the sentinel until
+  `connect()` lands, then let it settle.
 - `sync()` must return non-zero. Its result becomes `serverOffset`, and
   `initialise()` won't call `connect()` while that is falsy — so the script would
   never load. We coerce `0` to `1`.
