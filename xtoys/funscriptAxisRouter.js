@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "c6fd496e";             /* content hash, stamped by stamp.mjs */
+var BUILD = "aceffcef";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -44,20 +44,20 @@ var announced = "";
 var lastChannels = null;
 var sendFailed = false;
 
-/* Writes a variable so a Control displaying it actually redraws.
+/* Writes a variable so the Control displaying it redraws.
  *
- * setVariable() alone sets the value - getVariable() reads it back - but the
- * Control bound to it does not update, so Scene and Channels stayed blank while
- * the console logged the right values. Block scripts set variables through the
- * updateVariable Action instead, so do both: setVariable keeps it readable from
- * here, the Action is what the UI observes. Neither has a trigger attached, so
- * writing twice cannot double-fire anything. */
+ * The updateVariable Action is what the UI observes; a binding test confirmed
+ * it, and confirmed Controls bind by their `id`. setVariable() also works - it
+ * is readable through getVariable() - but nothing here needs reading back, so
+ * the Action alone keeps one mechanism instead of two.
+ *
+ * If a Control stays blank, check a status message actually arrived: these are
+ * only written from onStatus, and no status means nothing to show. */
 function setUiVariable(name, value) {
-  setVariable(name, value);
   try {
     callAction({ type: "updateVariable", variable: name, value: String(value) });
   } catch (e) {
-    /* older XToys, or a variable the Action refuses - the value is still set */
+    console.log("could not set " + name + ": " + e);
   }
 }
 
