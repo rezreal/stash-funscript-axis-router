@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "a7f9ea4a";             /* content hash, stamped by stamp.mjs */
+var BUILD = "d171210a";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -43,6 +43,23 @@ var halted = false;
 var announced = "";
 var lastChannels = null;
 var sendFailed = false;
+
+/* Writes a variable so a Control displaying it actually redraws.
+ *
+ * setVariable() alone sets the value - getVariable() reads it back - but the
+ * Control bound to it does not update, so Scene and Channels stayed blank while
+ * the console logged the right values. Block scripts set variables through the
+ * updateVariable Action instead, so do both: setVariable keeps it readable from
+ * here, the Action is what the UI observes. Neither has a trigger attached, so
+ * writing twice cannot double-fire anything. */
+function setUiVariable(name, value) {
+  setVariable(name, value);
+  try {
+    callAction({ type: "updateVariable", variable: name, value: String(value) });
+  } catch (e) {
+    /* older XToys, or a variable the Action refuses - the value is still set */
+  }
+}
 
 function numVar(name, fallback) {
   var v = parseFloat(getVariable(name));
@@ -138,22 +155,22 @@ function clock(total) {
 /* A Control reflects its variable and is labelled with its own name, so adding
  * an input Control called Scene, Elapsed, Playing or Channels displays it. */
 function onStatus(data) {
-  setVariable("Scene", data["trigger-title"] || "");
-  setVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
+  setUiVariable("Scene", data["trigger-title"] || "");
+  setUiVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
 
   var pos = parseFloat(data["trigger-position"]) || 0;
   var dur = parseFloat(data["trigger-duration"]) || 0;
-  setVariable("Elapsed", clock(pos) + " / " + clock(dur));
+  setUiVariable("Elapsed", clock(pos) + " / " + clock(dur));
 
   /* raw values, for anything doing arithmetic rather than display */
-  setVariable("videoPosition", data["trigger-position"] || "0");
-  setVariable("videoDuration", data["trigger-duration"] || "0");
-  setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
+  setUiVariable("videoPosition", data["trigger-position"] || "0");
+  setUiVariable("videoDuration", data["trigger-duration"] || "0");
+  setUiVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
 
   var chans = data["trigger-channels"] || "";
   if (chans !== lastChannels) {
     lastChannels = chans;
-    setVariable("Channels", chans);
+    setUiVariable("Channels", chans);
     console.log("channels in this scene: " + (chans === "" ? "(none)" : chans));
   }
 }
@@ -230,7 +247,7 @@ function onMessage(data) {
   /* Feeds the Watchdog Job, which is the deadman switch: JavaScript has no
    * timer, so the Job counts up and this resets it on every message. If the
    * browser goes away the Job drives everything to zero. */
-  setVariable("lastBeat", 0);
+  setUiVariable("lastBeat", 0);
 
   if (action === ACTION) onAxes(data);
   else if (action === "pause") onPauseMessage(data);
@@ -251,7 +268,7 @@ registerTrigger({ type: "variableChange", variable: "Seek" },    onSeekControl);
 
 function seed(name, value) {
   var v = getVariable(name);
-  if (v === undefined || v === null || String(v) === "") setVariable(name, value);
+  if (v === undefined || v === null || String(v) === "") setUiVariable(name, value);
 }
 
 seed("rampMs", RAMP_MS);
