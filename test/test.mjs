@@ -779,5 +779,61 @@ console.log("\nplayback rate");
   eq("rate published in status", after.rate, "1.25");
 }
 
+
+// ---- 30. per-channel debounce -------------------------------------------
+console.log("\nper-channel debounce");
+{
+  // pitch moves steadily, roll barely at all
+  const fs = { version: "2.0", channels: {
+    roll:  { actions: [{ at: 0, pos: 50 }, { at: 4000, pos: 51 }] },
+    pitch: { actions: [{ at: 0, pos: 0 }, { at: 4000, pos: 100 }] } } };
+
+  const e = makeEnv(fs, { xtoysWebhookId: "abc", deadband: 2, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  e.player.t = 0.0; e.tick();
+  eq("first frame carries every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+
+  // continuous playback: only pitch has moved past the deadband
+  e.player.t = 0.2; e.tick();
+  eq("only the channel that moved", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch"]);
+  e.player.t = 0.4; e.tick();
+  eq("still only the mover", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch"]);
+
+  // nothing moves at all -> nothing sent
+  const n = e.sent.length;
+  e.player.t = 0.401; e.tick();
+  eq("no movement sends nothing", e.sent.length, n);
+
+  // a seek must resend everything, even channels sitting on their old value
+  e.player.t = 3.0; e.tick();
+  eq("seek forward resends every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+
+  e.player.t = 0.5; e.tick();
+  eq("seek backward resends every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+}
+{
+  // a channel held below the deadband for a long time must not drift out of
+  // sync: comparison is against what was last SENT, not last sampled
+  const fs = { version: "2.0", channels: {
+    creep: { actions: [{ at: 0, pos: 0 }, { at: 10000, pos: 100 }] } } };
+  const e = makeEnv(fs, { xtoysWebhookId: "abc", deadband: 5, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  e.player.t = 0; e.tick();
+  const first = e.sent[e.sent.length-1].creep;
+  eq("starts at 0", first, "0");
+
+  // +1 per 100ms; four ticks is +4, still inside the deadband
+  for (const t of [0.1, 0.2, 0.3, 0.4]) { e.player.t = t; e.tick(); }
+  eq("held below the deadband, nothing sent", e.sent[e.sent.length-1].creep, "0");
+
+  // the fifth crosses it, measured from the last sent value
+  e.player.t = 0.5; e.tick();
+  eq("crosses the deadband against last sent", e.sent[e.sent.length-1].creep, "5");
+}
+
 console.log("\n" + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

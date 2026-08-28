@@ -117,7 +117,7 @@ usually a wrong token.
 | Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |
-| Deadband | `2` | Skip sending while nothing moved this far (0–100). |
+| Deadband | `2` | Per channel: a channel is only sent once it has moved this far since it was last sent (0–100). |
 | Axis Offset (ms) | interface offset | Falls back to Settings > Interface > Funscript Offset. |
 
 ## Who drives the stroke axis
@@ -140,6 +140,21 @@ axes stay aligned with each other even though none of them get the Handy's serve
 sync. Tick it if you notice the stroke axis sliding out of phase with the rest;
 it is the right setting for coordinated multi-axis hardware such as an OSR2 or
 SR6 driven through XToys.
+
+## What goes on the wire
+
+Only the channels that moved. Each is compared against the value last *sent* for
+it, not last sampled, so a slow drift still crosses the deadband eventually
+instead of creeping out of sync. A tick where nothing moved sends nothing at all.
+
+That works because XToys merges trigger data rather than replacing it: a channel
+left out of a message keeps its previous value on that side. Partial frames would
+be wrong on a protocol without that property.
+
+Every channel is resent when playback is not continuous — the first frame, after
+a seek in either direction, and at least once a second. After a seek the held
+values describe a position the player has left, and a channel that happened to
+land back on its previous value would otherwise never be corrected.
 
 ## Remote control
 

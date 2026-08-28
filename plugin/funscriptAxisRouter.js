@@ -377,6 +377,17 @@
 
   // A standalone message rather than a key mixed in with the axis values, so a
   // script can match on it without having to ignore it everywhere else.
+  // A jump larger than this is a seek rather than ordinary playback. Generous
+  // enough to survive a slow tick or 2x playback at the default 10Hz.
+  var SEEK_GAP_MS = 1000;
+
+  function isEmpty(o) {
+    for (var k in o) {
+      if (Object.prototype.hasOwnProperty.call(o, k)) return false;
+    }
+    return true;
+  }
+
   function pauseEvent(key, paused) {
     var e = {};
     e[key] = paused ? 1 : 0;
@@ -390,7 +401,9 @@
 
     this.axes = [];
     this.timer = null;
-    this.last = null;
+    this.last = null;        // every channel's last sampled value
+    this.sent = null;        // every channel's last value actually sent
+    this.lastTickMs = null;  // previous sample position, to spot a seek
     this.lastSentAt = 0;
   }
 
@@ -491,6 +504,8 @@
     if (pauseKey) this.sink.send(pauseEvent(pauseKey, true), "pause");
 
     this.last = null;
+    this.sent = null;
+    this.lastTickMs = null;
   };
 
   AuxAxisRunner.prototype.sample = function (ms) {
@@ -502,17 +517,32 @@
     return values;
   };
 
-  // XToys custom toys have an explicit Max Message Frequency; there is no point
-  // spending that budget resending a value nothing has moved off.
-  AuxAxisRunner.prototype.changed = function (values) {
-    if (!this.last) return true;
-    if (Date.now() - this.lastSentAt >= this.cfg.maxIdleMs) return true;
-
-    var last = this.last;
+  // Only the channels that actually moved. XToys merges trigger data rather than
+  // replacing it, so a channel left out keeps its previous value on that side -
+  // which is exactly right when it has not moved, and cuts most of the traffic
+  // on a script where one axis is busy and the others are still.
+  AuxAxisRunner.prototype.delta = function (values) {
+    var sent = this.sent;
     var deadband = this.cfg.deadband;
-    return Object.keys(values).some(function (k) {
-      return last[k] === undefined || Math.abs(values[k] - last[k]) >= deadband;
+    var out = {};
+
+    Object.keys(values).forEach(function (k) {
+      if (sent[k] === undefined || Math.abs(values[k] - sent[k]) >= deadband) {
+        out[k] = values[k];
+      }
     });
+
+    return out;
+  };
+
+  // A partial frame is only safe while playback is continuous. After a seek the
+  // other side's held values describe a position we are no longer at, and a
+  // channel that happens to land on its previous value would never be corrected.
+  AuxAxisRunner.prototype.discontinuous = function (ms) {
+    if (this.sent === null || this.lastTickMs === null) return true;
+    if (ms < this.lastTickMs) return true;              // seeked backwards
+    if (ms - this.lastTickMs > SEEK_GAP_MS) return true; // seeked forwards
+    return Date.now() - this.lastSentAt >= this.cfg.maxIdleMs;
   };
 
   AuxAxisRunner.prototype.tick = function () {
@@ -523,12 +553,24 @@
     // ScenePlayer has no `seeked` handler, so this is what makes seeking work.
     var ms = player.currentTime() * 1000 + this.cfg.offsetMs;
     var values = this.sample(ms);
+    var full = this.discontinuous(ms);
+    var payload = full ? values : this.delta(values);
 
-    if (!this.changed(values)) return;
-
+    this.lastTickMs = ms;
     this.last = values;
+
+    if (!full && isEmpty(payload)) return;
+
+    // only channels actually sent are remembered, so a value skipped by the
+    // deadband is still compared against what the other side last heard
+    if (this.sent === null) this.sent = {};
+    var sent = this.sent;
+    Object.keys(payload).forEach(function (k) {
+      sent[k] = payload[k];
+    });
+
     this.lastSentAt = Date.now();
-    this.sink.send(values);
+    this.sink.send(payload);
   };
 
   /* ----------------------------------------------------------------- remote */
