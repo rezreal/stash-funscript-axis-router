@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "5d343235";             /* content hash, stamped by stamp.mjs */
+var BUILD = "b7014d6b";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -241,10 +241,31 @@ function send(action, extra) {
 
 /* Button handlers. Named distinctly from the message handlers above - onPause
  * previously meant both, which silently broke pause handling. */
-function onPlayButton()    { send("play"); }
-function onPauseButton()   { send("pause"); }
-function onRewindButton()  { send("skip", { seconds: -numVar("skipSeconds", SKIP_SECONDS) }); }
-function onForwardButton() { send("skip", { seconds: numVar("skipSeconds", SKIP_SECONDS) }); }
+/* A push Control goes back to off when the mouse is released, so its variable
+ * changes twice per press - 1 then 0 - and a variableChange trigger fires for
+ * both. Acting on each would send every command twice. Log the value so one
+ * press shows how many times this fires and with what, then only act on the
+ * press rather than the release. */
+function press(control, action, extra) {
+  var v = getVariable(control);
+  console.log("control '" + control + "' changed to [" +
+              (v === undefined ? "undefined" : v === null ? "null" : String(v)) + "]");
+
+  var down = String(v);
+  if (down === "0" || down === "false" || down === "") {
+    console.log("  release, ignored");
+    return;
+  }
+
+  send(action, extra);
+}
+
+function onPlayButton()    { press("Play", "play"); }
+function onPauseButton()   { press("Pause", "pause"); }
+function onRewindButton()  { press("Rewind", "skip", { seconds: -numVar("skipSeconds", SKIP_SECONDS) }); }
+function onForwardButton() { press("Forward", "skip", { seconds: numVar("skipSeconds", SKIP_SECONDS) }); }
+
+/* Sliders hold a value rather than springing back, so they always act. */
 function onSeekControl()   { send("seek", { percent: numVar("Seek", 0) }); }
 function onSpeedControl()  { send("rate", { percent: numVar("Speed", 43) }); }
 
