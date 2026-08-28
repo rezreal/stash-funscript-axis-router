@@ -199,6 +199,7 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.onCommand = null;
     this.action = cfg.xtoysAction;
     this.heartbeatKey = cfg.heartbeatKey;
     this.heartbeatMs = cfg.heartbeatMs;
@@ -289,7 +290,11 @@
         self.acked = true;
         clearTimeout(self.ackTimer);
         console.log(LOG, "XToys acknowledged the connection");
+        return;
       }
+      // XToys only sends these when the webhook connection has "Script can send
+      // outbound messages" ticked, and only over a websocket.
+      if (parsed && self.onCommand) self.onCommand(parsed);
     };
 
     ws.onerror = function () {
@@ -489,11 +494,137 @@
     this.sink.send(values);
   };
 
+  /* ----------------------------------------------------------------- remote */
+
+  // The socket runs both ways, so an XToys script can double as a remote: we
+  // publish what the player is doing, and accept playback commands back.
+  //
+  // Commands are off by default. Whoever holds the XToys session can start,
+  // stop and seek your player, which is the entire point when someone else is
+  // driving a session - but it should be a deliberate choice, not a default.
+  function PlayerRemote(sink, cfg) {
+    this.sink = sink;
+    this.cfg = cfg;
+    this.timer = null;
+    this.sceneId = null;
+    this.title = "";
+    this.last = null;
+  }
+
+  PlayerRemote.prototype.setScene = function (url) {
+    var m = /\/scene\/([^\/?#]+)\//.exec(String(url));
+    var id = m ? m[1] : null;
+    if (!id || id === this.sceneId) return;
+
+    this.sceneId = id;
+    this.title = "";
+    this.last = null;
+
+    var self = this;
+    try {
+      var api = window.PluginApi;
+      api.utils.StashService.getClient()
+        .query({ query: api.GQL.FindSceneDocument, variables: { id: id } })
+        .then(function (r) {
+          var sc = r && r.data && r.data.findScene;
+          if (!sc) return;
+          var file = sc.files && sc.files[0];
+          self.title = sc.title || (file && file.basename) || "Scene " + id;
+          // republish straight away rather than leaving the title blank on
+          // screen until the next status tick
+          self.last = null;
+          self.publish();
+        })
+        .catch(function (e) {
+          console.warn(LOG, "could not read the scene title", e);
+        });
+    } catch (e) {
+      console.warn(LOG, "could not read the scene title", e);
+    }
+  };
+
+  PlayerRemote.prototype.start = function () {
+    if (this.timer !== null || !this.cfg.statusMs) return;
+    var self = this;
+    this.publish();
+    this.timer = setInterval(function () {
+      self.publish();
+    }, this.cfg.statusMs);
+  };
+
+  PlayerRemote.prototype.publish = function () {
+    var p = InteractiveUtils.getPlayer();
+    if (!p) return;
+
+    var duration = p.duration();
+    var status = {
+      title: this.title,
+      scene: this.sceneId || "",
+      position: Math.round(p.currentTime() || 0),
+      duration: Math.round(isFinite(duration) ? duration : 0),
+      playing: p.paused() ? 0 : 1,
+    };
+
+    // position ticks every second anyway, so only skip when truly unchanged
+    var key = [status.title, status.position, status.duration, status.playing].join("|");
+    if (key === this.last) return;
+    this.last = key;
+
+    this.sink.send(status, "status");
+  };
+
+  PlayerRemote.prototype.command = function (msg) {
+    if (!this.cfg.remoteControl) return;
+
+    var action = String((msg && msg.action) || "").toLowerCase();
+    if (!action) return;
+
+    var p = InteractiveUtils.getPlayer();
+    if (!p) return;
+
+    var duration = p.duration();
+    duration = isFinite(duration) ? duration : 0;
+
+    function seekTo(t) {
+      if (t < 0) t = 0;
+      if (duration && t > duration) t = duration;
+      p.currentTime(t);
+    }
+
+    switch (action) {
+      case "play":
+        p.play();
+        break;
+      case "pause":
+        p.pause();
+        break;
+      case "toggle":
+        if (p.paused()) p.play();
+        else p.pause();
+        break;
+      case "seek":
+        if (msg.percent !== undefined && duration) {
+          seekTo((num(msg.percent, 0) / 100) * duration);
+        } else if (msg.position !== undefined) {
+          seekTo(num(msg.position, 0));
+        }
+        break;
+      case "skip":
+        seekTo((p.currentTime() || 0) + num(msg.seconds, 0));
+        break;
+      default:
+        return; // not ours; axes/pause/heartbeat echo back harmlessly
+    }
+
+    this.publish();
+  };
+
   /* ----------------------------------------------------------------- client */
 
-  function RouterClient(handy, runner) {
+  function RouterClient(handy, runner, remote) {
     this.handy = handy;
     this.runner = runner;
+    this.remote = remote;
     // stash gates the whole interactive pipeline on a non-empty handyKey (see
     // context.tsx uploadScript and ScenePlayer's `interactiveClient.handyKey`
     // check), so when there is no Handy we hand it a sentinel.
@@ -545,6 +676,12 @@
     var self = this;
     this.runner.stop();
 
+    if (this.remote) {
+      this.remote.setScene(url);
+      this.runner.sink.open();
+      this.remote.start();
+    }
+
     var load = fetch(withApiKey(url, apiKey), { credentials: "same-origin" })
       .then(function (r) {
         if (!r.ok) throw new Error("funscript fetch failed: " + r.status);
@@ -565,11 +702,13 @@
 
   RouterClient.prototype.play = function (pos) {
     this.runner.start();
+    if (this.remote) this.remote.publish();
     return Promise.resolve(this.handy ? this.handy.play(pos) : undefined);
   };
 
   RouterClient.prototype.pause = function () {
     this.runner.stop();
+    if (this.remote) this.remote.publish();
     return Promise.resolve(this.handy ? this.handy.pause() : undefined);
   };
 
@@ -655,6 +794,8 @@
       pauseKey: pauseKey,
       heartbeatKey: heartbeatKey,
       heartbeatMs: heartbeatMs,
+      remoteControl: raw.remoteControl === true || raw.remoteControl === "true",
+      statusMs: clamp(num(raw.statusMs, 1000), 0, 60000),
       only: only,
       routeStroke: false, // set by the provider once we know about the Handy
       updateHz: clamp(num(raw.updateHz, 10), 1, 50),
@@ -713,6 +854,19 @@
       "| " + cfg.updateHz + "Hz"
     );
 
-    return new RouterClient(handy, new AuxAxisRunner(new XToysSink(cfg), cfg));
+    var sink = new XToysSink(cfg);
+    var runner = new AuxAxisRunner(sink, cfg);
+    var remote = cfg.statusMs || cfg.remoteControl ? new PlayerRemote(sink, cfg) : null;
+
+    if (remote) {
+      sink.onCommand = function (m) {
+        remote.command(m);
+      };
+      if (cfg.remoteControl) {
+        console.log(LOG, "remote control enabled - XToys can drive this player");
+      }
+    }
+
+    return new RouterClient(handy, runner, remote);
   };
 })();

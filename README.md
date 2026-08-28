@@ -111,6 +111,8 @@ usually a wrong token.
 | Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
 | Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
 | Heartbeat Interval (ms) | `1000` | Make your script's timeout 2–3× this. |
+| Allow Remote Control | off | Let XToys drive playback. See *Remote control* below. |
+| Status Interval (ms) | `1000` | How often to publish title/position/duration. `0` disables. |
 | Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |
@@ -137,6 +139,25 @@ axes stay aligned with each other even though none of them get the Handy's serve
 sync. Tick it if you notice the stroke axis sliding out of phase with the rest;
 it is the right setting for coordinated multi-axis hardware such as an OSR2 or
 SR6 driven through XToys.
+
+## Remote control
+
+The websocket runs both ways. The plugin publishes what the player is doing —
+title, position, duration, playing — about once a second, and can accept
+`play` / `pause` / `toggle` / `seek` / `skip` back. An XToys script then works as
+a remote for the stash player, which is the point when stash is on a phone or
+headset and someone else is running the session.
+
+*Allow Remote Control* is **off by default**: with it on, anyone with access to
+the XToys session can start, stop and seek your player. It also needs
+**"Script can send outbound messages"** ticked on the webhook connection in
+XToys, and a websocket connection — outbound does not work over GET or POST.
+
+Status publishing is independent and on by default; set *Status Interval* to `0`
+to send nothing. It starts as soon as a scene loads, not when playback does, so
+the remote has something to show straight away.
+
+See [xtoys/README.md](xtoys/README.md) for the control names to add.
 
 ## Stopping safely
 

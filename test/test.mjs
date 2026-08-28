@@ -13,8 +13,16 @@ function eq(name, a, b) { ok(name, JSON.stringify(a) === JSON.stringify(b), {got
 // ---- harness -------------------------------------------------------------
 function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
   const sent = [];
-  const player = { t: 0, isPaused: false, currentTime() { return this.t; }, paused() { return this.isPaused; } };
-  let tickFn = null, hbSlot = null, tickMs = null;
+  const calls = [];
+  const player = {
+    t: 0, isPaused: false, dur: 200,
+    currentTime(v) { if (v !== undefined) { this.t = v; calls.push("seek:" + v); } return this.t; },
+    paused() { return this.isPaused; },
+    duration() { return this.dur; },
+    play() { this.isPaused = false; calls.push("play"); },
+    pause() { this.isPaused = true; calls.push("pause"); },
+  };
+  let tickFn = null, hbSlot = null, stSlot = null, tickMs = null;
 
   const raw = [], conns = [];
   class FakeWS {
@@ -32,10 +40,23 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     console, Promise, JSON, Math, Date, Object, Array, isFinite, parseFloat, URL, Error,
     WebSocket: FakeWS,
     setTimeout, clearTimeout,
-    setInterval: (fn, ms) => { if (ms === 1000 || ms >= 200 && hbSlot === null && ms !== tickMs) { hbSlot = fn; return 2; } tickFn = fn; tickMs = ms; return 1; },
-    clearInterval: (id) => { if (id === 2) hbSlot = null; else tickFn = null; },
+    setInterval: (fn, ms) => {
+      if (ms === 1000) { if (hbSlot === null) { hbSlot = fn; return 2; } stSlot = fn; return 3; }
+      if (ms >= 200 && ms !== tickMs && hbSlot === null) { hbSlot = fn; return 2; }
+      tickFn = fn; tickMs = ms; return 1;
+    },
+    clearInterval: (id) => { if (id === 2) hbSlot = null; else if (id === 3) stSlot = null; else tickFn = null; },
     fetch: async () => ({ ok: true, json: async () => funscript }),
-    window: { PluginApi: { utils: { InteractiveUtils } }, location: { href: "http://localhost:9999/scenes/1" } },
+    window: {
+      PluginApi: {
+        utils: {
+          InteractiveUtils,
+          StashService: { getClient: () => ({ query: async () => ({ data: { findScene: { title: "My Scene" } } }) }) },
+        },
+        GQL: { FindSceneDocument: {} },
+      },
+      location: { href: "http://localhost:9999/scenes/1" },
+    },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
@@ -49,7 +70,7 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     stashConfig: { interface: iface, plugins: { funscriptAxisRouter: pluginSettings || {} } },
   };
   const client = InteractiveUtils.interactiveClientProvider(opts);
-  return { client, sent, raw, conns, FakeWS, player, handyBuilt, beat: () => hbSlot && hbSlot(), hasBeat: () => !!hbSlot, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
+  return { client, sent, raw, conns, FakeWS, player, calls, handyBuilt, sock: () => FakeWS.last, beat: () => hbSlot && hbSlot(), hasBeat: () => !!hbSlot, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
 }
 
 const V2 = {
@@ -73,7 +94,7 @@ const V10 = { version: "1.0", actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 
 // ---- 1. v2.0 channels ----------------------------------------------------
 console.log("\nv2.0 channels");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("http://localhost:9999/scene/1/funscript");
   await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
@@ -88,7 +109,7 @@ console.log("\nv2.0 channels");
 // ---- 2. v1.1 axes --------------------------------------------------------
 console.log("\nv1.1 axes array");
 {
-  const e = makeEnv(V11, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V11, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.25; e.tick();
@@ -104,12 +125,12 @@ console.log("\nv1.0 single axis");
     connect: () => Promise.resolve(), sync: () => Promise.resolve(0), configure: () => Promise.resolve(),
     uploadScript: () => Promise.resolve(), play: () => Promise.resolve(), pause: () => Promise.resolve(),
     ensurePlaying: () => Promise.resolve(), setLooping: () => Promise.resolve() };
-  const e = makeEnv(V10, { xtoysWebhookId: "abc", pauseKey: "", heartbeatKey: "" , xtoysAction: "" }, {}, handy);
+  const e = makeEnv(V10, { xtoysWebhookId: "abc", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 }, {}, handy);
   await e.client.uploadScript("u"); await e.client.play(0);
   ok("with a Handy, stroke-only script routes nothing", !e.hasTick());
   eq("nothing sent", e.sent.length, 0);
 
-  const e2 = makeEnv(V10, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e2 = makeEnv(V10, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e2.client.uploadScript("u"); await e2.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   ok("without a Handy, stroke IS routed", e2.hasTick());
@@ -120,7 +141,7 @@ console.log("\nv1.0 single axis");
 // ---- 4. seeking ----------------------------------------------------------
 console.log("\nseek");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.5; e.tick();
@@ -134,7 +155,7 @@ console.log("\nseek");
 // ---- 5. deadband ---------------------------------------------------------
 console.log("\ndeadband");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 10, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 10, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -148,7 +169,7 @@ console.log("\ndeadband");
 // ---- 6. pause ------------------------------------------------------------
 console.log("\npause");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -161,7 +182,7 @@ console.log("\npause");
 // ---- 7. no-handy fallbacks ----------------------------------------------
 console.log("\nno-handy operation");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", pauseKey: "", heartbeatKey: "" , xtoysAction: "" }, {});
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 }, {});
   eq("sentinel handyKey non-empty", e.client.handyKey, "funscriptAxisRouter");
   eq("sync never returns 0", await e.client.sync(), 1);
   await e.client.connect();
@@ -209,7 +230,7 @@ console.log("\ninverted + range normalisation");
   const fs2 = { version: "2.0", channels: {
     roll: { inverted: true, actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
     pitch: { range: 50, actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 50 }] } } };
-  const e = makeEnv(fs2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(fs2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.0; e.tick();
@@ -221,7 +242,7 @@ console.log("\ninverted + range normalisation");
 // ---- 10. offset + axis filter -------------------------------------------
 console.log("\noffset + axis filter");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, axes: "roll", offsetMs: 500, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, axes: "roll", offsetMs: 500, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.0; e.tick();
@@ -230,7 +251,7 @@ console.log("\noffset + axis filter");
   eq("offset applied (t=0 +500ms)", m.roll, "50");
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" }, { funscriptOffset: 1000 });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 }, { funscriptOffset: 1000 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.0; e.tick();
@@ -245,7 +266,7 @@ console.log("\narbitrary channel names");
     vibe:        { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
     "e-stim":    { actions: [{ at: 0, pos: 10 }, { at: 1000, pos: 90 }] },
     R1:          { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 40 }] } } };
-  const e = makeEnv(custom, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(custom, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -259,13 +280,13 @@ console.log("\narbitrary channel names");
 // ---- 13. filter accepts either spelling ----------------------------------
 console.log("\nfilter by name or id");
 {
-  const e = makeEnv(V11, { xtoysWebhookId: "abc", deadband: 0, axes: "roll" , xtoysAction: "" });
+  const e = makeEnv(V11, { xtoysWebhookId: "abc", deadband: 0, axes: "roll" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   eq("'roll' selects the R1 channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["R1"]);
 
-  const e2 = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, axes: "R2" , xtoysAction: "" });
+  const e2 = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, axes: "R2" , xtoysAction: "", statusMs: 0 });
   await e2.client.uploadScript("u"); await e2.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e2.player.t = 0.5; e2.tick();
@@ -278,7 +299,7 @@ console.log("\ndedupe axes vs channels");
   const dup = { version: "2.0",
     axes: [{ id: "R1", actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] }],
     channels: { roll: { actions: [{ at: 0, pos: 100 }, { at: 1000, pos: 0 }] } } };
-  const e = makeEnv(dup, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(dup, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -290,7 +311,7 @@ console.log("\ndedupe axes vs channels");
 // ---- 16. stroke axis ownership ------------------------------------------
 console.log("\nstroke axis owner (checkbox)");
 {
-  const base = { xtoysWebhookId: "a", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" };
+  const base = { xtoysWebhookId: "a", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 };
   const mkHandy = () => ({ handyKey: "REALKEY", connected: true, playing: false,
     connect: () => Promise.resolve(), sync: () => Promise.resolve(0), configure: () => Promise.resolve(),
     uploadScript: () => Promise.resolve(), play: () => Promise.resolve(), pause: () => Promise.resolve(),
@@ -333,7 +354,7 @@ console.log("\nstroke axis owner (checkbox)");
 // ---- 17. wire format ----------------------------------------------------
 console.log("\nwire format");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -349,7 +370,7 @@ console.log("\nwire format");
 // ---- 18. stop value ------------------------------------------------------
 console.log("\nstop value");
 {
-  const hold = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const hold = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await hold.client.uploadScript("u"); await hold.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   hold.player.t = 0.5; hold.tick();
@@ -357,7 +378,7 @@ console.log("\nstop value");
   await hold.client.pause();
   eq("blank holds the last values", hold.sent[hold.sent.length - 1], before);
 
-  const park = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const park = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await park.client.uploadScript("u"); await park.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   park.player.t = 0.5; park.tick();
@@ -370,20 +391,20 @@ console.log("\nstop value");
 // ---- 19. token auth ------------------------------------------------------
 console.log("\ntoken auth");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK", pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   eq("token goes in the query string", e.conns[0].url, "wss://webhook.xtoys.app/abc?token=TOK");
   eq("no subprotocol is used", e.conns[0].protocols, undefined);
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "a b/c&d", pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "a b/c&d", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   eq("token is url-encoded", e.conns[0].url, "wss://webhook.xtoys.app/abc?token=a%20b%2Fc%26d");
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   eq("no token means no query string", e.conns[0].url, "wss://webhook.xtoys.app/abc");
@@ -392,7 +413,7 @@ console.log("\ntoken auth");
 // ---- 20. server acknowledgement -----------------------------------------
 console.log("\nserver ack");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK", pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK", pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   const ws = e.FakeWS.last;
@@ -403,7 +424,7 @@ console.log("\nserver ack");
   ok("malformed server data is ignored", true);
 
   // sending must not be gated on the ack - a tokenless webhook never sends one
-  const n = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "" });
+  const n = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await n.client.uploadScript("u"); await n.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   n.player.t = 0.5; n.tick();
@@ -414,7 +435,7 @@ console.log("\nserver ack");
 // ---- 21. pause event -----------------------------------------------------
 console.log("\npause event");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u");
   await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
@@ -425,7 +446,7 @@ console.log("\npause event");
   eq("it is its own message, not mixed into values", Object.keys(e.sent[e.sent.length - 1]), ["pause"]);
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "halt", heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "halt", heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   await e.client.pause();
@@ -433,7 +454,7 @@ console.log("\npause event");
 }
 {
   // pause event + stop value compose: park the channels, then signal the halt
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, heartbeatKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, heartbeatKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
@@ -446,7 +467,7 @@ console.log("\npause event");
 // ---- 22. heartbeat -------------------------------------------------------
 console.log("\nheartbeat");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   ok("heartbeat timer started", e.hasBeat());
@@ -462,7 +483,7 @@ console.log("\nheartbeat");
   eq("still beating while paused", e.sent[e.sent.length - 1], { heartbeat: "1" });
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "", pauseKey: "" , xtoysAction: "" });
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "", pauseKey: "" , xtoysAction: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   ok("blank key disables the heartbeat", !e.hasBeat());
@@ -496,8 +517,9 @@ console.log("\nscript envelope");
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  eq("resume uses the pause action", e.sent[0].action, "pause");
-  eq("resume payload", JSON.parse(e.sent[0].payload), { pause: "0" });
+  const resume = e.sent.filter(m => m.action === "pause")[0];
+  eq("resume uses the pause action", resume.action, "pause");
+  eq("resume payload", JSON.parse(resume.payload), { pause: "0" });
   e.beat();
   eq("heartbeat uses its own action", e.sent[e.sent.length - 1].action, "heartbeat");
   await e.client.pause();
@@ -524,6 +546,72 @@ console.log("\nscript envelope");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   eq("no envelope when blank", Object.keys(e.sent[e.sent.length - 1]).sort(), ["pitch","roll","stroke"]);
+}
+
+
+// ---- 24. player status ---------------------------------------------------
+console.log("\nplayer status");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  e.player.t = 12; e.player.dur = 200; e.player.isPaused = true;
+  await e.client.uploadScript("http://x/scene/42/funscript");
+  await new Promise(r => setTimeout(r, 20));
+  const st = e.sent.filter(m => m.action === "status").pop();
+  ok("status published without waiting for playback", !!st);
+  eq("scene id parsed from the funscript url", st.scene, "42");
+  eq("position", st.position, "12");
+  eq("duration", st.duration, "200");
+  eq("paused reported", st.playing, "0");
+  eq("title resolved over graphql", st.title, "My Scene");
+}
+
+// ---- 25. remote control --------------------------------------------------
+console.log("\nremote control");
+{
+  const off = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  await off.client.uploadScript("http://x/scene/42/funscript");
+  await new Promise(r => setTimeout(r, 5));
+  off.sock().onmessage({ data: JSON.stringify({ action: "play" }) });
+  off.sock().onmessage({ data: JSON.stringify({ action: "seek", position: 99 }) });
+  eq("commands ignored while remote control is off", off.calls, []);
+
+  const on = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", remoteControl: true });
+  on.player.t = 10; on.player.dur = 200; on.player.isPaused = true;
+  await on.client.uploadScript("http://x/scene/42/funscript");
+  await new Promise(r => setTimeout(r, 5));
+  const sock = on.sock();
+
+  sock.onmessage({ data: JSON.stringify({ action: "play" }) });
+  ok("play", on.calls.includes("play"), on.calls);
+  sock.onmessage({ data: JSON.stringify({ action: "pause" }) });
+  ok("pause", on.calls.includes("pause"), on.calls);
+  sock.onmessage({ data: JSON.stringify({ action: "toggle" }) });
+  ok("toggle resumes from paused", on.calls.filter(c => c === "play").length === 2, on.calls);
+
+  on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "seek", position: 50 }) });
+  eq("seek to a position", on.calls, ["seek:50"]);
+
+  on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "seek", percent: 25 }) });
+  eq("seek by percent of duration", on.calls, ["seek:50"]);
+
+  on.player.t = 100; on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "skip", seconds: -10 }) });
+  eq("skip backwards", on.calls, ["seek:90"]);
+
+  on.player.t = 195; on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "skip", seconds: 60 }) });
+  eq("skip clamps to duration", on.calls, ["seek:200"]);
+
+  on.player.t = 5; on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "skip", seconds: -60 }) });
+  eq("skip clamps at zero", on.calls, ["seek:0"]);
+
+  on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ action: "axes", roll: "10" }) });
+  sock.onmessage({ data: "garbage" });
+  eq("unknown and malformed commands are inert", on.calls, []);
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");

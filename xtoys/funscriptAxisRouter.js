@@ -89,6 +89,60 @@ function onPause(data) {
   if (halted) stopAll();
 }
 
+/* ---------------------------------------------------------------- remote */
+
+/* Status the plugin publishes about once a second. These land in XToys
+ * variables, so any Control that displays a variable can show them. */
+function onStatus(data) {
+  setVariable("videoTitle", data["trigger-title"] || "");
+  setVariable("videoPosition", data["trigger-position"] || "0");
+  setVariable("videoDuration", data["trigger-duration"] || "0");
+  setVariable("videoPlaying", data["trigger-playing"] || "0");
+
+  var pos = parseFloat(data["trigger-position"]) || 0;
+  var dur = parseFloat(data["trigger-duration"]) || 0;
+  setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
+  setVariable("videoElapsed", clock(pos) + " / " + clock(dur));
+}
+
+function clock(total) {
+  total = Math.max(0, Math.round(total));
+  var m = Math.floor(total / 60);
+  var sec = total % 60;
+  return m + ":" + (sec < 10 ? "0" : "") + sec;
+}
+
+/* Sending back to the plugin needs "Script can send outbound messages" ticked
+ * on the webhook connection, and only works over a websocket.
+ *
+ * UNVERIFIED: the exact Action shape for an outbound webhook message is not in
+ * the docs. If these do nothing, use 'Add XToys Action' in the JS editor with
+ * the webhook block selected to get the real JSON, and fix this one function -
+ * everything else routes through it. */
+function sendToStash(msg) {
+  msg.channel = WEBHOOK;
+  callAction(msg);
+}
+
+function play()      { sendToStash({ type: "updateComponent", action: "send", data: { action: "play" } }); }
+function pause()     { sendToStash({ type: "updateComponent", action: "send", data: { action: "pause" } }); }
+function toggle()    { sendToStash({ type: "updateComponent", action: "send", data: { action: "toggle" } }); }
+function skip(secs)  { sendToStash({ type: "updateComponent", action: "send", data: { action: "skip", seconds: secs } }); }
+function seekPct(p)  { sendToStash({ type: "updateComponent", action: "send", data: { action: "seek", percent: p } }); }
+
+/* Add push Controls with these names and they become remote buttons. A push
+ * Control sets its variable, which is what fires these. */
+registerTrigger({ type: "variableChange", variable: "btnPlay" },  function () { play(); });
+registerTrigger({ type: "variableChange", variable: "btnPause" }, function () { pause(); });
+registerTrigger({ type: "variableChange", variable: "btnToggle" }, function () { toggle(); });
+registerTrigger({ type: "variableChange", variable: "btnBack" },  function () { skip(-30); });
+registerTrigger({ type: "variableChange", variable: "btnFwd" },   function () { skip(30); });
+
+/* A slider Control named seekPercent scrubs the video. */
+registerTrigger({ type: "variableChange", variable: "seekPercent" }, function () {
+  seekPct(parseFloat(getVariable("seekPercent")) || 0);
+});
+
 function onHeartbeat(data) {
   /* Liveness only. The deadman switch itself is the Watchdog Job - see the
    * README: JavaScript here has no timer of its own, and sleep() would block
@@ -101,6 +155,8 @@ registerTrigger(
   { type: "componentState", channel: WEBHOOK, action: "pause" }, onPause);
 registerTrigger(
   { type: "componentState", channel: WEBHOOK, action: "heartbeat" }, onHeartbeat);
+registerTrigger(
+  { type: "componentState", channel: WEBHOOK, action: "status" }, onStatus);
 
 stopAll();
 console.log("funscript axis router ready, " + OUTPUTS.length + " outputs");

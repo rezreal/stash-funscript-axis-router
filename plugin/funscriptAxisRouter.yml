@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.6.0
+version: 0.7.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -74,6 +74,21 @@ settings:
       How often to send the heartbeat. Default 1000. Make your XToys script's
       timeout comfortably longer than this - two or three intervals - so a single
       late message does not trip it.
+    type: NUMBER
+  remoteControl:
+    displayName: Allow Remote Control
+    description: >-
+      Let the XToys script drive this player - play, pause, seek and skip. Off by
+      default: anyone with access to the XToys session can then control playback,
+      which is the point for a remote session but should be a deliberate choice.
+      Requires "Script can send outbound messages" on the webhook connection.
+    type: BOOLEAN
+  statusMs:
+    displayName: Status Interval (ms)
+    description: >-
+      How often to publish player status - title, position, duration and whether
+      it is playing - so an XToys script can display it. Default 1000. Set to 0
+      to publish nothing.
     type: NUMBER
   axes:
     displayName: Axes To Route

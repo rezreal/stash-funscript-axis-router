@@ -103,6 +103,47 @@ Three triggers, matching the `action` the plugin sends:
 - **`pause`** — `1` zeroes every output and holds, `0` releases.
 - **`heartbeat`** — liveness for the watchdog.
 
+## Remote controlling the player
+
+The websocket runs both ways, so an XToys script can double as a remote for the
+stash player — useful when stash is on a phone or headset and someone else is
+driving the session from XToys.
+
+**Enable outbound first.** Tick **"Script can send outbound messages"** when
+adding the Private Webhook block connection to the script. Outbound only works
+over a websocket, not GET or POST. Then turn on *Allow Remote Control* in the
+plugin — it is off by default, because it lets whoever holds the XToys session
+start, stop and seek your player.
+
+### Status the plugin publishes
+
+Roughly once a second, as `action: "status"`. The script drops these into
+variables, so any Control that displays a variable can show them:
+
+| Variable | Example |
+|---|---|
+| `videoTitle` | `My Scene` |
+| `videoPosition` / `videoDuration` | `73` / `1284` (seconds) |
+| `videoElapsed` | `1:13 / 21:24` |
+| `videoPercent` | `6` |
+| `videoPlaying` | `1` / `0` |
+
+### Buttons
+
+Add **push** Controls named `btnPlay`, `btnPause`, `btnToggle`, `btnBack`,
+`btnFwd`, and a **slider** named `seekPercent`. Each sets its variable, which is
+what the script's `variableChange` triggers fire on.
+
+Commands understood by the plugin: `play`, `pause`, `toggle`,
+`seek` (with `position` in seconds *or* `percent`), and `skip` (with `seconds`,
+negative to go back). Seeks are clamped to the video length.
+
+> **The outbound Action shape is unverified.** The docs confirm outbound messages
+> exist but never show the Action JSON for sending one. Everything routes through
+> a single `sendToStash()` function — if the buttons do nothing, use
+> **Add XToys Action** in the JS editor with the webhook block selected to get
+> the real JSON and fix that one function.
+
 ## Building it by hand
 
 The JSON describes exactly this.
