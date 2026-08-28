@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var VERSION = "0.9.4";      /* logged on start, so you can see what is loaded */
+var VERSION = "0.10.0";      /* logged on start, so you can see what is loaded */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -167,6 +167,12 @@ function onStatus(data) {
  *    "webhookAction":"ACTION_NAME","format":"raw","webhookData":"DATA"}
  * so the action name travels in webhookAction, not alongside the payload. */
 function send(action, extra) {
+  /* Logged before the call, so a silent button separates into two cases: this
+   * line missing means the Control's variableChange trigger never fired, and
+   * this line present with nothing on the wire means callAction was accepted
+   * but XToys sent nothing - which is the outbound checkbox. */
+  console.log("button: " + action);
+
   var data = "";
   if (extra) {
     for (var k in extra) {
@@ -183,6 +189,7 @@ function send(action, extra) {
       format: "raw",
       webhookData: data
     });
+    console.log("  sent '" + action + "' data='" + data + "' on " + WEBHOOK);
   } catch (e) {
     if (!sendFailed) {
       sendFailed = true;

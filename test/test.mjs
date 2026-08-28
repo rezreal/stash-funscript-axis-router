@@ -712,5 +712,33 @@ console.log("\npayload copy");
   eq("a channel named payload survives when the copy is off", d.payload, "50");
 }
 
+
+// ---- 28. XToys session events -------------------------------------------
+console.log("\nsession events");
+{
+  // tracked even with remote control off - knowing who is connected is not
+  // remote control
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  await e.client.uploadScript("http://x/scene/42/funscript");
+  await new Promise(r => setTimeout(r, 5));
+  const sock = e.sock();
+
+  sock.onmessage({ data: JSON.stringify({ event: "join", type: "guest", uid: "rezreal" }) });
+  sock.onmessage({ data: JSON.stringify({ event: "join", type: "host", uid: "host" }) });
+  sock.onmessage({ data: JSON.stringify({ event: "join", type: "guest", uid: "rezreal" }) });
+  eq("joins tracked, no duplicates", e.client.remote.peers, ["rezreal", "host"]);
+
+  sock.onmessage({ data: JSON.stringify({ event: "leave", uid: "host" }) });
+  eq("leave removes the peer", e.client.remote.peers, ["rezreal"]);
+
+  sock.onmessage({ data: JSON.stringify({ event: "leave", uid: "nobody" }) });
+  eq("unknown leave is harmless", e.client.remote.peers, ["rezreal"]);
+
+  // a session event must never be mistaken for a playback command
+  e.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ event: "join", type: "guest", uid: "x" }) });
+  eq("session events drive nothing", e.calls, []);
+}
+
 console.log("\n" + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);

@@ -546,6 +546,7 @@
     this.sceneId = null;
     this.title = "";
     this.channels = [];
+    this.peers = [];
     this.last = null;
   }
 
@@ -664,7 +665,37 @@
     return out;
   }
 
+  // XToys announces session membership over the same socket:
+  //   {"event":"join","type":"guest","uid":"rezreal"}
+  // Worth surfacing - it is the only signal of who is on the other end, which
+  // matters when someone else is driving the session.
+  PlayerRemote.prototype.session = function (msg) {
+    if (!msg || !msg.event) return false;
+
+    var uid = String(msg.uid || "?");
+    var kind = String(msg.type || "peer");
+
+    if (msg.event === "join") {
+      if (this.peers.indexOf(uid) === -1) this.peers.push(uid);
+      console.log(LOG, "XToys " + kind + " joined: " + uid +
+                  " (" + this.peers.length + " connected)");
+    } else if (msg.event === "leave") {
+      var at = this.peers.indexOf(uid);
+      if (at !== -1) this.peers.splice(at, 1);
+      console.log(LOG, "XToys " + kind + " left: " + uid +
+                  " (" + this.peers.length + " connected)");
+    } else {
+      return false;
+    }
+
+    return true;
+  };
+
   PlayerRemote.prototype.command = function (raw) {
+    if (this.session(raw)) return;
+
+    // deliberately after the session check: knowing who is connected is not
+    // remote control, and is useful even with commands disabled
     if (!this.cfg.remoteControl) return;
 
     var msg = normaliseCommand(raw);
