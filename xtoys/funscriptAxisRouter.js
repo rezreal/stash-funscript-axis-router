@@ -134,7 +134,9 @@ function onAxes(data) {
 
 function onPause(data) {
   halted = String(data["trigger-pause"]) === "1";
-  if (halted) stopAll();
+  if (halted) console.log("remote controls to add (name:type): " + CONTROLS);
+
+stopAll();
 }
 
 function onHeartbeat(data) {
@@ -161,7 +163,19 @@ function onStatus(data) {
   var dur = parseFloat(data["trigger-duration"]) || 0;
   setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
   setVariable("videoElapsed", clock(pos) + " / " + clock(dur));
+
+  /* What this scene actually carries, so you can see which names are worth
+   * putting in the out1..outN Controls instead of guessing. Display it with a
+   * Control bound to videoChannels. */
+  var chans = data["trigger-channels"] || "";
+  if (chans !== lastChannels) {
+    lastChannels = chans;
+    setVariable("videoChannels", chans);
+    console.log("channels in this scene: " + (chans === "" ? "(none)" : chans));
+  }
 }
+
+var lastChannels = null;
 
 /* Needs "Script can send outbound messages" ticked on the webhook connection.
  *
@@ -182,8 +196,13 @@ function seekPct(p) { sendToStash({ type: "updateComponent", action: "send", dat
 function onBtnPlay()   { play(); }
 function onBtnPause()  { pause(); }
 function onBtnToggle() { toggle(); }
-function onBtnBack()   { skip(-30); }
-function onBtnFwd()    { skip(30); }
+function skipAmount() {
+  var v = parseFloat(getVariable("skipSeconds"));
+  return isNaN(v) || v <= 0 ? 30 : v;
+}
+
+function onBtnBack()   { skip(-skipAmount()); }
+function onBtnFwd()    { skip(skipAmount()); }
 function onSeek()      { seekPct(parseFloat(getVariable("seekPercent")) || 0); }
 
 /* ---------------------------------------------------------------- dispatch */
@@ -215,6 +234,11 @@ registerTrigger({ type: "variableChange", variable: "btnToggle" }, onBtnToggle);
 registerTrigger({ type: "variableChange", variable: "btnBack" },   onBtnBack);
 registerTrigger({ type: "variableChange", variable: "btnFwd" },    onBtnFwd);
 registerTrigger({ type: "variableChange", variable: "seekPercent" }, onSeek);
+
+/* Controls the remote expects, so a missing one is obvious rather than just
+ * being a button that does nothing. */
+var CONTROLS = "btnPlay:push,btnPause:push,btnToggle:push,btnBack:push," +
+               "btnFwd:push,seekPercent:slider,skipSeconds:input";
 
 /* ------------------------------------------------------------------ report */
 

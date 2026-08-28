@@ -435,6 +435,14 @@
     return names.length;
   };
 
+  AuxAxisRunner.prototype.names = function () {
+    var out = [];
+    this.axes.forEach(function (ax) {
+      out.push(ax.key);
+    });
+    return out;
+  };
+
   AuxAxisRunner.prototype.start = function () {
     if (this.timer !== null || !this.hasAxes) return;
     this.sink.open();
@@ -533,8 +541,15 @@
     this.timer = null;
     this.sceneId = null;
     this.title = "";
+    this.channels = [];
     this.last = null;
   }
+
+  PlayerRemote.prototype.setChannels = function (names) {
+    this.channels = names || [];
+    this.last = null;
+    this.publish();
+  };
 
   PlayerRemote.prototype.setScene = function (url) {
     var m = /\/scene\/([^\/?#]+)\//.exec(String(url));
@@ -543,6 +558,7 @@
 
     this.sceneId = id;
     this.title = "";
+    this.channels = [];
     this.last = null;
 
     var self = this;
@@ -588,10 +604,15 @@
       position: Math.round(p.currentTime() || 0),
       duration: Math.round(isFinite(duration) ? duration : 0),
       playing: p.paused() ? 0 : 1,
+      // what this scene actually carries, so a remote can list the names that
+      // are worth mapping to an output instead of the user guessing
+      channels: this.channels.join(","),
     };
 
     // position ticks every second anyway, so only skip when truly unchanged
-    var key = [status.title, status.position, status.duration, status.playing].join("|");
+    var key = [
+      status.title, status.position, status.duration, status.playing, status.channels,
+    ].join("|");
     if (key === this.last) return;
     this.last = key;
 
@@ -729,6 +750,7 @@
       })
       .then(function (json) {
         self.runner.load(json);
+        if (self.remote) self.remote.setChannels(self.runner.names());
       })
       .catch(function (e) {
         console.error(LOG, "could not load axes", e);

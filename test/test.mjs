@@ -565,6 +565,7 @@ console.log("\nplayer status");
   eq("duration", st.duration, "200");
   eq("paused reported", st.playing, "0");
   eq("title resolved over graphql", st.title, "My Scene");
+  eq("routed channels listed", st.channels, "roll,pitch,stroke");
 }
 
 // ---- 25. remote control --------------------------------------------------

@@ -2,42 +2,42 @@
  "initialActions": [
   {
    "type": "updateVariable",
-   "variable": "out1",
+   "variable": "val1",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out2",
+   "variable": "val2",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out3",
+   "variable": "val3",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out4",
+   "variable": "val4",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out5",
+   "variable": "val5",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out6",
+   "variable": "val6",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out7",
+   "variable": "val7",
    "value": "0"
   },
   {
    "type": "updateVariable",
-   "variable": "out8",
+   "variable": "val8",
    "value": "0"
   },
   {
@@ -124,7 +124,7 @@
    "actions": [
     {
      "type": "customCode",
-     "code": "\nvar map = {};\ntry { map = JSON.parse(payload) || {}; } catch (e) { map = {}; }\n\n// case-insensitive, so \"Roll\" in the config box finds \"roll\" in the script\nvar lower = {};\nfor (var k in map) { if (map.hasOwnProperty(k)) lower[String(k).toLowerCase()] = map[k]; }\n\nfunction pick(name) {\n  if (!name) return null;\n  var v = lower[String(name).trim().toLowerCase()];\n  if (v === undefined || v === null || v === \"\") return null;\n  var n = parseFloat(v);\n  if (isNaN(n)) return null;\n  return Math.max(0, Math.min(100, Math.round(n)));\n}\n\nvar names = [channel1, channel2, channel3, channel4, channel5, channel6, channel7, channel8];\nfor (var i = 0; i < names.length; i++) {\n  var v = pick(names[i]);\n  // -1 means \"leave this output alone\"\n  setVariable(\"out\" + (i + 1), v === null ? -1 : v);\n}\n",
+     "code": "\nvar map = {};\ntry { map = JSON.parse(payload) || {}; } catch (e) { map = {}; }\n\n// case-insensitive, so \"Roll\" in the config box finds \"roll\" in the script\nvar lower = {};\nfor (var k in map) { if (map.hasOwnProperty(k)) lower[String(k).toLowerCase()] = map[k]; }\n\nfunction pick(name) {\n  if (!name) return null;\n  var v = lower[String(name).trim().toLowerCase()];\n  if (v === undefined || v === null || v === \"\") return null;\n  var n = parseFloat(v);\n  if (isNaN(n)) return null;\n  return Math.max(0, Math.min(100, Math.round(n)));\n}\n\nvar names = [out1, out2, out3, out4, out5, out6, out7, out8];\nfor (var i = 0; i < names.length; i++) {\n  var v = pick(names[i]);\n  // -1 means \"leave this output alone\"\n  setVariable(\"val\" + (i + 1), v === null ? -1 : v);\n}\n",
      "variables": [
       {
        "name": "payload",
@@ -132,43 +132,43 @@
        "expression": null
       },
       {
-       "name": "channel1",
-       "value": "channel1",
+       "name": "out1",
+       "value": "out1",
        "expression": null
       },
       {
-       "name": "channel2",
-       "value": "channel2",
+       "name": "out2",
+       "value": "out2",
        "expression": null
       },
       {
-       "name": "channel3",
-       "value": "channel3",
+       "name": "out3",
+       "value": "out3",
        "expression": null
       },
       {
-       "name": "channel4",
-       "value": "channel4",
+       "name": "out4",
+       "value": "out4",
        "expression": null
       },
       {
-       "name": "channel5",
-       "value": "channel5",
+       "name": "out5",
+       "value": "out5",
        "expression": null
       },
       {
-       "name": "channel6",
-       "value": "channel6",
+       "name": "out6",
+       "value": "out6",
        "expression": null
       },
       {
-       "name": "channel7",
-       "value": "channel7",
+       "name": "out7",
+       "value": "out7",
        "expression": null
       },
       {
-       "name": "channel8",
-       "value": "channel8",
+       "name": "out8",
+       "value": "out8",
        "expression": null
       }
      ],
@@ -185,64 +185,64 @@
      "action": "setVolume",
      "channel": "generic-1-a",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out1}",
-     "condition": "{out1} >= 0 && {halted} == 0"
+     "percentVolume": "{val1}",
+     "condition": "{val1} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-b",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out2}",
-     "condition": "{out2} >= 0 && {halted} == 0"
+     "percentVolume": "{val2}",
+     "condition": "{val2} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-c",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out3}",
-     "condition": "{out3} >= 0 && {halted} == 0"
+     "percentVolume": "{val3}",
+     "condition": "{val3} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-d",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out4}",
-     "condition": "{out4} >= 0 && {halted} == 0"
+     "percentVolume": "{val4}",
+     "condition": "{val4} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-e",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out5}",
-     "condition": "{out5} >= 0 && {halted} == 0"
+     "percentVolume": "{val5}",
+     "condition": "{val5} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-f",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out6}",
-     "condition": "{out6} >= 0 && {halted} == 0"
+     "percentVolume": "{val6}",
+     "condition": "{val6} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-g",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out7}",
-     "condition": "{out7} >= 0 && {halted} == 0"
+     "percentVolume": "{val7}",
+     "condition": "{val7} >= 0 && {halted} == 0"
     },
     {
      "type": "updateComponent",
      "action": "setVolume",
      "channel": "generic-1-h",
      "rampTime": "{rampMs}/1000",
-     "percentVolume": "{out8}",
-     "condition": "{out8} >= 0 && {halted} == 0"
+     "percentVolume": "{val8}",
+     "condition": "{val8} >= 0 && {halted} == 0"
     }
    ]
   },
@@ -478,35 +478,35 @@
  },
  "controls": [
   {
-   "name": "channel1",
+   "name": "out1",
    "type": "input"
   },
   {
-   "name": "channel2",
+   "name": "out2",
    "type": "input"
   },
   {
-   "name": "channel3",
+   "name": "out3",
    "type": "input"
   },
   {
-   "name": "channel4",
+   "name": "out4",
    "type": "input"
   },
   {
-   "name": "channel5",
+   "name": "out5",
    "type": "input"
   },
   {
-   "name": "channel6",
+   "name": "out6",
    "type": "input"
   },
   {
-   "name": "channel7",
+   "name": "out7",
    "type": "input"
   },
   {
-   "name": "channel8",
+   "name": "out8",
    "type": "input"
   },
   {
@@ -515,6 +515,34 @@
   },
   {
    "name": "watchdogMs",
+   "type": "input"
+  },
+  {
+   "name": "btnPlay",
+   "type": "push"
+  },
+  {
+   "name": "btnPause",
+   "type": "push"
+  },
+  {
+   "name": "btnToggle",
+   "type": "push"
+  },
+  {
+   "name": "btnBack",
+   "type": "push"
+  },
+  {
+   "name": "btnFwd",
+   "type": "push"
+  },
+  {
+   "name": "seekPercent",
+   "type": "slider"
+  },
+  {
+   "name": "skipSeconds",
    "type": "input"
   }
  ],

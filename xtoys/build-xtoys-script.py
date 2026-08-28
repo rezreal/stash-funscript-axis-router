@@ -53,13 +53,25 @@ for i in range(1, N + 1):
     channels[generic(i)] = {"name": "out%d" % i, "type": "generic-1"}
 
 # A Control's name is the variable it sets, so these become {channel1}..{channelN}
-controls = [{"name": "channel%d" % i, "type": "input"} for i in range(1, N + 1)]
+controls = [{"name": "out%d" % i, "type": "input"} for i in range(1, N + 1)]
 controls += [
     {"name": "rampMs", "type": "input"},
     {"name": "watchdogMs", "type": "input"},
 ]
 
-initial = [{"type": "updateVariable", "variable": "out%d" % i, "value": "0"} for i in range(1, N + 1)]
+# Remote controls. A Control's name is the variable it sets, and the script
+# triggers on that variable changing - so the names matter and the labels do not.
+controls += [
+    {"name": "btnPlay", "type": "push"},
+    {"name": "btnPause", "type": "push"},
+    {"name": "btnToggle", "type": "push"},
+    {"name": "btnBack", "type": "push"},
+    {"name": "btnFwd", "type": "push"},
+    {"name": "seekPercent", "type": "slider"},
+    {"name": "skipSeconds", "type": "input"},
+]
+
+initial = [{"type": "updateVariable", "variable": "val%d" % i, "value": "0"} for i in range(1, N + 1)]
 initial += [
     {"type": "updateVariable", "variable": "halted", "value": "0"},
     {"type": "updateVariable", "variable": "lastBeat", "value": "0"},
@@ -89,13 +101,13 @@ var names = [%s];
 for (var i = 0; i < names.length; i++) {
   var v = pick(names[i]);
   // -1 means "leave this output alone"
-  setVariable("out" + (i + 1), v === null ? -1 : v);
+  setVariable("val" + (i + 1), v === null ? -1 : v);
 }
-""" % ", ".join("channel%d" % i for i in range(1, N + 1))
+""" % ", ".join("out%d" % i for i in range(1, N + 1))
 
 apply_vars = [{"name": "payload", "value": "trigger-payload", "expression": None}]
 apply_vars += [
-    {"name": "channel%d" % i, "value": "channel%d" % i, "expression": None}
+    {"name": "out%d" % i, "value": "out%d" % i, "expression": None}
     for i in range(1, N + 1)
 ]
 
@@ -115,7 +127,7 @@ axes_trigger = {
         {"type": "updateVariable", "variable": "lastBeat", "value": "0"},
     ]
     + [
-        set_volume(i, "{out%d}" % i, "{rampMs}/1000", "{out%d} >= 0 && {halted} == 0" % i)
+        set_volume(i, "{val%d}" % i, "{rampMs}/1000", "{val%d} >= 0 && {halted} == 0" % i)
         for i in range(1, N + 1)
     ],
 }
