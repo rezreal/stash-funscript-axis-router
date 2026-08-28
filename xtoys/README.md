@@ -90,7 +90,27 @@ successfully. A **private** webhook avoids the question entirely, so prefer one.
 No rate limits are documented. If updates arrive throttled, lower the plugin's
 *Update Rate (Hz)* before assuming anything else is wrong.
 
-### Using a custom toy instead
+### A custom toy will not work as the input
+
+**Tested and ruled out.** With a `custom-websocket` toy connected, 40 trigger
+shapes were registered against it — bare, `action=`, and `eventType=` — and not
+one fired. A custom toy is something XToys *sends to*; it does not deliver
+received messages to a script trigger.
+
+It still appears in `channels` as `{"type": "generic-custom-toy"}` and can be an
+**output**, driven with `action: "setValue"` and a `key` rather than the
+`setVolume`/`percentVolume` generic toys use. Just not an input.
+
+Use a **Private Webhook** instead:
+
+1. [xtoys.app/me](https://xtoys.app/me) → Private Webhooks → create one → copy
+   the Webhook ID.
+2. In your script, use the plug button to add and connect a **Webhook** block.
+   Tick **"Script can send outbound messages"** if you want the remote controls.
+3. Put the Webhook ID into the plugin's *XToys Webhook ID*, and leave
+   *XToys Token* blank — private webhooks need no token.
+
+### Older notes on custom toys
 
 **Confirmed from a real export:** a custom toy appears in a script's `channels`
 map as

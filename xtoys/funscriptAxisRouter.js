@@ -29,7 +29,11 @@ var OUTPUTS = [
   { channel: "",       toy: "generic-1-h" }
 ];
 
-var WEBHOOK = "webhook-a"; /* channel name of the Webhook block */
+/* Channel name of the Webhook block. Leave "" to detect it from the connected
+ * blocks - the name depends on which slot the block occupies, and guessing it
+ * wrong is silent: triggers register happily against a channel that does not
+ * exist and simply never fire. */
+var WEBHOOK = "";
 var ACTION = "axes";       /* must match the plugin's XToys Action Name */
 var RAMP_MS = 100;         /* smoothing between updates; ~one update interval */
 
@@ -40,6 +44,35 @@ var USE_CONTROLS = false;
 /* --------------------------------------------------------------- internals */
 
 var halted = false;
+
+function findWebhook() {
+  if (WEBHOOK) return WEBHOOK;
+
+  var blocks = {};
+  try {
+    blocks = getConnectedBlocks() || {};
+  } catch (e) {
+    console.log("could not list connected blocks: " + e);
+    return "webhook-a";
+  }
+
+  var names = [];
+  for (var ch in blocks) {
+    if (!blocks.hasOwnProperty(ch)) continue;
+    names.push(ch);
+    if (ch.indexOf("webhook") === 0) return ch;
+  }
+
+  console.log(
+    "no webhook block found among: " + names.join(", ") +
+    " - add a Webhook block and connect it to the script. A custom-websocket " +
+    "toy will not work: it does not deliver messages to script triggers."
+  );
+  return "webhook-a";
+}
+
+WEBHOOK = findWebhook();
+console.log("listening on channel '" + WEBHOOK + "'");
 
 function channelFor(i) {
   if (!USE_CONTROLS) return OUTPUTS[i].channel;
