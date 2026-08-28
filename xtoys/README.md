@@ -4,6 +4,7 @@ Two ways to build the XToys side. **Prefer the JavaScript one.**
 
 | File | What it is |
 |---|---|
+| [`diagnostic.js`](diagnostic.js) | Paste in first. Reports what arrives and what your blocks are called. |
 | [`funscriptAxisRouter.js`](funscriptAxisRouter.js) | Paste into the XToys **JS editor**. Recommended — nothing to import. |
 | [`funscriptAxisRouter.xtoys.json`](funscriptAxisRouter.xtoys.json) | The same thing as blocks and triggers, for building in the editor by hand. |
 
@@ -14,6 +15,31 @@ name.
 > because they run on xtoys.app. The shapes come from real script exports and the
 > official JS API docs, but treat them as drafts. Please report what needed
 > changing.
+
+## Start here: the diagnostic
+
+Before wiring outputs, paste [`diagnostic.js`](diagnostic.js) into the JS editor
+and play a scene. It drives nothing and reports three things we otherwise have to
+guess at:
+
+- **what your blocks are called** — `getConnectedBlocks()` output, which gives you
+  the real channel names for `OUTPUTS`
+- **whether the triggers fire at all**
+- **the exact `trigger-<key>` data** each message carries
+
+Expect roughly:
+
+```
+connected blocks: [...]
+diagnostic ready; listening on channel 'webhook-a'
+status #1  {trigger-title = My Scene, trigger-position = 0, ...}
+axes #1    {trigger-roll = 50, trigger-pitch = 35, trigger-payload = {...}, ...}
+heartbeat #1  {...}
+```
+
+**Nothing at all** means `WEBHOOK` at the top does not match the channel name of
+the block receiving the messages — the `connected blocks` line tells you what to
+put there.
 
 ## The JavaScript route
 
