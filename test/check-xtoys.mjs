@@ -5,6 +5,7 @@
  * shipped. These assert the properties that actually matter here.
  */
 import fs from "node:fs";
+import { buildHash } from "../xtoys/stamp.mjs";
 
 const FILES = ["xtoys/funscriptAxisRouter.js", "xtoys/diagnostic.js"];
 let failures = 0;
@@ -62,6 +63,16 @@ if (!embedded || embedded.length < 1000) {
   fail("manifest", "customFunctions has drifted from funscriptAxisRouter.js");
 } else {
   console.log("  ok");
+}
+
+// the console stamp has to be trustworthy, so verify it matches the content
+const jsSrc = fs.readFileSync("xtoys/funscriptAxisRouter.js", "utf8");
+const stamped = /var BUILD = "([^"]*)";/.exec(jsSrc);
+const expected = buildHash(jsSrc);
+if (!stamped) fail("xtoys/funscriptAxisRouter.js", "no BUILD stamp");
+else if (stamped[1] !== expected) {
+  fail("xtoys/funscriptAxisRouter.js",
+       `BUILD is ${stamped[1]} but the content hashes to ${expected} - run node xtoys/stamp.mjs`);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nxtoys checks passed");

@@ -10,15 +10,17 @@ self-contained.
 | [`funscriptAxisRouter.js`](funscriptAxisRouter.js) | The same JavaScript, standalone, for reading and diffing. CI fails if the two drift apart. |
 | [`diagnostic.js`](diagnostic.js) | A probe that drives nothing and reports what arrives. For when something is silent. |
 
-On start the XToys console prints the version, so you can tell what is actually
+On start the XToys console prints a build hash, so you can tell what is actually
 loaded:
 
 ```
-funscript axis router 0.9.2, listening on 'webhook-a'
+funscript axis router build a7f9ea4a, listening on 'webhook-a'
 ```
 
-If that says anything other than the version you just loaded, XToys is still
-running the old script.
+It is a hash of the script itself, not the plugin version - editing the XToys
+side does not touch the plugin. After changing `funscriptAxisRouter.js`, run
+`node xtoys/stamp.mjs` to restamp it and re-embed it in the JSON; CI fails if
+the stamp and the content disagree.
 
 > **Beta, and only partly verified.** The message path is confirmed working end
 > to end. The remote buttons are not: the outbound Action shape comes from

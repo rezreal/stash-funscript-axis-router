@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var VERSION = "0.10.0";      /* logged on start, so you can see what is loaded */
+var BUILD = "a7f9ea4a";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -258,7 +258,7 @@ seed("rampMs", RAMP_MS);
 seed("skipSeconds", SKIP_SECONDS);
 seed("watchdogMs", 3000);
 
-console.log("funscript axis router " + VERSION + ", listening on '" + WEBHOOK + "'");
+console.log("funscript axis router build " + BUILD + ", listening on '" + WEBHOOK + "'");
 
 if (OUTS.length === 0) {
   console.log("TOYS is empty - set it to your toy channel names");
