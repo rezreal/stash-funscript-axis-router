@@ -80,9 +80,12 @@ usually a wrong token.
 
 | Setting | Default | Notes |
 |---|---|---|
-| Stroke Axis Owner | `auto` | `auto`, `router` or `handy` — see below. |
+| Route Stroke Axis Here | off | See *Who drives the stroke axis* below. |
 | XToys Webhook ID | — | Blank disables routing entirely. |
 | XToys Token | — | Only for a custom toy; sent as `?token=`. See *About the token* above. |
+| Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
+| Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
+| Heartbeat Interval (ms) | `1000` | Make your script's timeout 2–3× this. |
 | Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |
@@ -91,25 +94,41 @@ usually a wrong token.
 
 ## Who drives the stroke axis
 
-The **Stroke Axis Owner** setting decides this, because the two candidates do not
-share a clock.
+The **Route Stroke Axis Here** checkbox decides this, because the two candidates
+do not share a clock.
 
-| Value | Behaviour |
+| State | Behaviour |
 |---|---|
-| `auto` *(default)* | The Handy plays it when a Handy key is configured; this plugin routes it otherwise. |
-| `router` | This plugin always routes it, on the same clock as every other axis. The Handy is **not used at all**, even if configured. |
-| `handy` | Always left to the Handy. If no key is configured, nothing plays it. |
+| **off** *(default)* | The Handy plays it when a Handy key is configured. With no Handy, this plugin routes it, so it is never simply dropped. |
+| **on** | This plugin always routes it, on the same clock as every other axis. The Handy is **not used at all**, even if configured. |
 
-`auto` is the best of both when you have a Handy: it plays the stroke axis off
-its own uploaded script, synced against the Handy's *server* time, which is more
-accurate than anything a browser can do. The catch is that every other axis is
-ticked from the *browser* clock, so the two can drift apart over a long scene.
+Off is the better default when you have a Handy: it plays the stroke axis from
+its own uploaded script against the Handy's *server* time, which is more accurate
+than anything a browser can manage. The catch is that every other axis is ticked
+from the *browser* clock, so the two can drift apart over a long scene.
 
-`router` trades that accuracy for phase coherence — one clock drives everything,
-so the axes stay aligned with each other even though none of them get the Handy's
-server sync. Choose it if you notice the stroke axis sliding out of phase with
-the rest; it's the right setting for coordinated multi-axis hardware such as an
-OSR2 or SR6 driven through XToys.
+On trades that accuracy for phase coherence — one clock drives everything, so the
+axes stay aligned with each other even though none of them get the Handy's server
+sync. Tick it if you notice the stroke axis sliding out of phase with the rest;
+it is the right setting for coordinated multi-axis hardware such as an OSR2 or
+SR6 driven through XToys.
+
+## Stopping safely
+
+Three independent things happen when playback stops, and they compose:
+
+- **Pause Event Key** (default `pause`) — a message of its own, `{"pause":"1"}`
+  on pause and `{"pause":"0"}` on resume, so your script can halt in one place
+  rather than inferring a stop from values that went quiet.
+- **Stop Value** — park every channel at a set value. Blank holds the last
+  values, because zero is not a neutral for every axis (50 is centre for roll and
+  pitch, 0 is off for a vibe). Set it to `0` if any channel drives a vibrator.
+- **Heartbeat** (default `heartbeat`, every 1000 ms) — a deadman switch. It keeps
+  beating *while paused*, so your script can tell "paused" (heartbeats, no axis
+  values) apart from "the browser is gone" (nothing at all) and shut its outputs
+  down only for the latter. Closing the tab, a crash, or a dropped network all
+  stop the beat. Make your script's timeout two or three intervals long so one
+  late message does not trip it.
 
 ## Script formats
 
@@ -130,8 +149,8 @@ be embedded in the one file.
 
 - **Clock drift.** With the default `auto` setting the Handy plays the stroke
   axis off *server* time while the other axes are ticked from the *browser*
-  clock, so the two can drift apart. Set Stroke Axis Owner to `router` to put
-  every axis on one clock — see above.
+  clock, so the two can drift apart. Tick Route Stroke Axis Here to put every
+  axis on one clock — see above.
 - **Latency.** XToys webhooks are a cloud round-trip. Good enough for auxiliary
   motion, not good enough to have been worth using for the stroke axis.
 - **On stop**, values are held rather than zeroed by default, because zero is not

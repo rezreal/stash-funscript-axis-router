@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.4.0
+version: 0.5.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -14,15 +14,14 @@ ui:
       - wss://webhook.xtoys.app
 
 settings:
-  strokeAxis:
-    displayName: Stroke Axis Owner
+  routeStrokeAxis:
+    displayName: Route Stroke Axis Here
     description: >-
-      Who drives the stroke axis. "auto" (default) leaves it to the Handy when a
-      Handy key is configured, and routes it through this plugin otherwise.
-      "router" always routes it through this plugin on the same clock as every
-      other axis and does not use the Handy at all - use this if the Handy and
-      the other axes drift apart. "handy" always leaves it to the Handy.
-    type: STRING
+      Off (default), the Handy plays the stroke axis when a Handy key is
+      configured, and this plugin routes it otherwise. On, this plugin always
+      routes it, on the same clock as every other axis, and the Handy is not used
+      at all. Turn this on if the Handy drifts out of phase with the other axes.
+    type: BOOLEAN
   xtoysWebhookId:
     displayName: XToys Webhook ID
     description: >-
@@ -43,6 +42,29 @@ settings:
       What to send to every channel when playback stops. Leave blank to hold the
       last values. Set to 0 to park vibrations, which is usually what you want if
       any channel drives a vibrator.
+    type: NUMBER
+  pauseKey:
+    displayName: Pause Event Key
+    description: >-
+      Key sent as its own message when playback pauses ("1") and resumes ("0"),
+      so your XToys script can halt everything in one place instead of inferring
+      a stop from values going quiet. Defaults to "pause". Leave blank to
+      disable, which falls back to Stop Value or holding the last values.
+    type: STRING
+  heartbeatKey:
+    displayName: Heartbeat Key
+    description: >-
+      Key sent periodically as a deadman switch, so your XToys script can shut
+      its outputs down if the browser tab crashes, closes or loses the network.
+      Heartbeats keep going while playback is paused, so "paused" and "gone" are
+      distinguishable. Defaults to "heartbeat". Leave blank to disable.
+    type: STRING
+  heartbeatMs:
+    displayName: Heartbeat Interval (ms)
+    description: >-
+      How often to send the heartbeat. Default 1000. Make your XToys script's
+      timeout comfortably longer than this - two or three intervals - so a single
+      late message does not trip it.
     type: NUMBER
   axes:
     displayName: Axes To Route

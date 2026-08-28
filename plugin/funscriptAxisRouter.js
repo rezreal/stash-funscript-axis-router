@@ -38,13 +38,6 @@
 
   var STROKE_AXIS = "L0";
 
-  // Who drives the stroke axis.
-  //   auto   - the Handy when one is configured, this plugin otherwise
-  //   router - always this plugin, on the same clock as every other axis; the
-  //            Handy is not used at all
-  //   handy  - always the Handy; nobody plays it if no key is configured
-  var STROKE_MODES = { auto: true, router: true, handy: true };
-
   function canonicalAxis(key) {
     return AXIS_ALIASES[String(key).toLowerCase()] || null;
   }
@@ -200,6 +193,9 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.heartbeatKey = cfg.heartbeatKey;
+    this.heartbeatMs = cfg.heartbeatMs;
+    this.heartbeatTimer = null;
     this.url =
       "wss://webhook.xtoys.app/" +
       cfg.xtoysWebhookId +
@@ -216,6 +212,29 @@
   XToysSink.prototype.open = function () {
     this.closed = false;
     this.connect();
+    this.startHeartbeat();
+  };
+
+  // A deadman switch. It deliberately keeps running while playback is paused,
+  // so the XToys side can tell "paused" (heartbeats, no axis values) apart from
+  // "the browser is gone" (nothing at all) and shut its outputs down only for
+  // the latter. Closing the tab, crashing, or losing the network all stop these.
+  XToysSink.prototype.startHeartbeat = function () {
+    if (this.heartbeatTimer !== null || !this.heartbeatKey || !this.heartbeatMs) {
+      return;
+    }
+    var self = this;
+    this.heartbeatTimer = setInterval(function () {
+      var beat = {};
+      beat[self.heartbeatKey] = 1;
+      self.send(beat);
+    }, this.heartbeatMs);
+  };
+
+  XToysSink.prototype.stopHeartbeat = function () {
+    if (this.heartbeatTimer === null) return;
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
   };
 
   XToysSink.prototype.connect = function () {
@@ -305,6 +324,14 @@
 
   /* ----------------------------------------------------------------- runner */
 
+  // A standalone message rather than a key mixed in with the axis values, so a
+  // script can match on it without having to ignore it everywhere else.
+  function pauseEvent(key, paused) {
+    var e = {};
+    e[key] = paused ? 1 : 0;
+    return e;
+  }
+
   function AuxAxisRunner(sink, cfg) {
     this.sink = sink;
     this.cfg = cfg;
@@ -357,6 +384,12 @@
   AuxAxisRunner.prototype.start = function () {
     if (this.timer !== null || !this.hasAxes) return;
     this.sink.open();
+
+    // Paired with the pause event below, so a script that halted on pause has
+    // something to resume on. The timer guard above means this fires once per
+    // real transition, not on every play() the player emits.
+    if (this.cfg.pauseKey) this.sink.send(pauseEvent(this.cfg.pauseKey, false));
+
     var self = this;
     this.timer = setInterval(function () {
       self.tick();
@@ -368,22 +401,29 @@
     clearInterval(this.timer);
     this.timer = null;
 
-    // On stop, either hold the last values or drive every channel to a set
-    // value. Holding is the safe default: zero is not a neutral for every axis
-    // (50 is centre for roll and pitch, 0 is off for a vibe), so which one you
-    // want depends on your hardware. Set Stop Value to 0 to park vibrations.
-    if (this.last) {
-      var stop = this.cfg.stopValue;
-      if (stop === null) {
-        this.sink.send(this.last);
-      } else {
-        var parked = {};
-        Object.keys(this.last).forEach(function (k) {
-          parked[k] = stop;
-        });
-        this.sink.send(parked);
-      }
+    // Three things can happen on stop, and they compose:
+    //
+    //   Stop Value  - park every channel at a set value. Zero is not a neutral
+    //                 for every axis (50 is centre for roll and pitch, 0 is off
+    //                 for a vibe), so this is opt-in.
+    //   Pause Event - a single message your script can halt on, rather than
+    //                 inferring a stop from values that went quiet.
+    //   neither     - hold the last values, so nothing lurches.
+    var stop = this.cfg.stopValue;
+    var pauseKey = this.cfg.pauseKey;
+
+    if (this.last && stop !== null) {
+      var parked = {};
+      Object.keys(this.last).forEach(function (k) {
+        parked[k] = stop;
+      });
+      this.sink.send(parked);
+    } else if (this.last && !pauseKey) {
+      this.sink.send(this.last);
     }
+
+    if (pauseKey) this.sink.send(pauseEvent(pauseKey, true));
+
     this.last = null;
   };
 
@@ -562,17 +602,32 @@
     var stopRaw = String(raw.stopValue === undefined ? "" : raw.stopValue).trim();
     var stopValue = stopRaw === "" ? null : clamp(num(stopRaw, 0), 0, 100);
 
-    var strokeAxis = String(raw.strokeAxis || "").trim().toLowerCase() || "auto";
-    if (!STROKE_MODES[strokeAxis]) {
-      console.warn(LOG, 'unknown strokeAxis "' + strokeAxis + '", falling back to "auto"');
-      strokeAxis = "auto";
-    }
+    // unset falls back to "heartbeat"; explicitly blank disables the deadman
+    var heartbeatKey = String(
+      raw.heartbeatKey === undefined || raw.heartbeatKey === null
+        ? "heartbeat"
+        : raw.heartbeatKey
+    ).trim();
+    var heartbeatMs = clamp(num(raw.heartbeatMs, 1000), 200, 60000);
+
+    // unset falls back to "pause"; explicitly blank disables the event
+    var pauseKey = String(
+      raw.pauseKey === undefined || raw.pauseKey === null ? "pause" : raw.pauseKey
+    ).trim();
+
+    // Off means "let the Handy have the stroke axis if one is configured"; this
+    // plugin still takes it when there is no Handy, since otherwise nothing
+    // would play it at all.
+    var routeStrokeAxis = raw.routeStrokeAxis === true || raw.routeStrokeAxis === "true";
 
     return {
-      strokeAxis: strokeAxis,
+      routeStrokeAxis: routeStrokeAxis,
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
       xtoysToken: String(raw.xtoysToken || "").trim(),
       stopValue: stopValue,
+      pauseKey: pauseKey,
+      heartbeatKey: heartbeatKey,
+      heartbeatMs: heartbeatMs,
       only: only,
       routeStroke: false, // set by the provider once we know about the Handy
       updateHz: clamp(num(raw.updateHz, 10), 1, 50),
@@ -592,22 +647,21 @@
     var iface = (opts.stashConfig && opts.stashConfig.interface) || {};
     var hasHandy = !!String(iface.handyKey || "").trim();
 
-    // "router" deliberately declines the Handy even when one is configured: the
-    // Handy plays its uploaded script off *server* time while everything else is
+    // When the box is ticked we decline the Handy even if one is configured: it
+    // plays its uploaded script off *server* time while everything else is
     // ticked from the browser clock, so the only way to keep the axes in phase
     // is for one clock to drive all of them.
-    var useHandy = cfg.strokeAxis === "router" ? false : hasHandy;
+    var useHandy = !cfg.routeStrokeAxis && hasHandy;
 
     var handy =
       useHandy && opts.defaultClientProvider ? opts.defaultClientProvider(opts) : null;
 
-    cfg.routeStroke =
-      cfg.strokeAxis === "router" || (cfg.strokeAxis === "auto" && !handy);
+    cfg.routeStroke = cfg.routeStrokeAxis || !handy;
 
-    if (cfg.strokeAxis === "router" && hasHandy) {
+    if (cfg.routeStrokeAxis && hasHandy) {
       console.warn(
         LOG,
-        'strokeAxis is "router", so the configured Handy will not be used at all.'
+        "Route Stroke Axis Here is on, so the configured Handy will not be used at all."
       );
     }
 
