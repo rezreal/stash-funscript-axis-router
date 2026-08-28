@@ -20,6 +20,11 @@
  * keyed by channel in one script and a plain array in another, will not
  * marshal through the interpreter, and calling callAction() with a channel
  * that does not exist crashes XToys internally. Set these by hand. */
+/* The channel KEY, not the block's display name. In a Script Export the
+ * channels: {} section reads
+ *     "webhook-a": { "name": "stash", "type": "webhook" }
+ * so this is "webhook-a" - "stash" is only the label. Setting the name here
+ * fails silently: the trigger registers and never fires. */
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
@@ -156,29 +161,33 @@ function onStatus(data) {
 
 /* Needs "Script can send outbound messages" ticked on the webhook connection.
  *
- * UNVERIFIED: the Action shape for an outbound webhook message is not
- * documented. If the buttons do nothing, use 'Add XToys Action' in this editor
- * with the webhook block selected and correct this one function. */
-function sendToStash(msg) {
-  msg.channel = WEBHOOK;
+ * The shape comes from 'Add XToys Action' with the webhook block selected:
+ *   {"type":"updateComponent","channel":"webhook-a","action":"send",
+ *    "webhookAction":"ACTION_NAME","format":"raw","webhookData":"DATA"}
+ * so the action name travels in webhookAction, not alongside the payload. */
+function send(action, extra) {
+  var data = "";
+  if (extra) {
+    for (var k in extra) {
+      data = data + (data === "" ? "" : "&") + k + "=" + extra[k];
+    }
+  }
+
   try {
-    callAction(msg);
+    callAction({
+      type: "updateComponent",
+      channel: WEBHOOK,
+      action: "send",
+      webhookAction: action,
+      format: "raw",
+      webhookData: data
+    });
   } catch (e) {
     if (!sendFailed) {
       sendFailed = true;
-      console.log("sending to stash failed: " + e +
-                  " - use 'Add XToys Action' with the webhook block selected " +
-                  "to get the correct JSON, then fix sendToStash()");
+      console.log("sending to stash failed: " + e);
     }
   }
-}
-
-function send(action, extra) {
-  var data = { action: action };
-  if (extra) {
-    for (var k in extra) { data[k] = extra[k]; }
-  }
-  sendToStash({ type: "updateComponent", action: "send", data: data });
 }
 
 /* Button handlers. Named distinctly from the message handlers above - onPause

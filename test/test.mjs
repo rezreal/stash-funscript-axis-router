@@ -611,6 +611,20 @@ console.log("\nremote control");
   sock.onmessage({ data: JSON.stringify({ action: "skip", seconds: -60 }) });
   eq("skip clamps at zero", on.calls, ["seek:0"]);
 
+  // the envelope XToys actually sends: action in webhookAction, extras in
+  // webhookData as a raw k=v string
+  on.player.t = 100; on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ webhookAction: "skip", format: "raw", webhookData: "seconds=-10" }) });
+  eq("webhookAction + raw webhookData", on.calls, ["seek:90"]);
+
+  on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ webhookAction: "play" }) });
+  ok("webhookAction with no data", on.calls.includes("play"), on.calls);
+
+  on.player.t = 10; on.calls.length = 0;
+  sock.onmessage({ data: JSON.stringify({ webhookAction: "seek", webhookData: '{"percent":25}' }) });
+  eq("webhookData as JSON is accepted too", on.calls, ["seek:50"]);
+
   on.calls.length = 0;
   sock.onmessage({ data: JSON.stringify({ action: "axes", roll: "10" }) });
   sock.onmessage({ data: "garbage" });

@@ -623,9 +623,51 @@
     this.sink.send(status, "status");
   };
 
-  PlayerRemote.prototype.command = function (msg) {
+  // XToys puts the action name in webhookAction and any extra fields in
+  // webhookData, which with format "raw" is a k=v&k=v string. Accept that as
+  // well as a plain {action: ...} object, since the exact envelope XToys wraps
+  // an outbound message in is not documented.
+  function normaliseCommand(msg) {
+    if (!msg || typeof msg !== "object") return null;
+
+    var out = {};
+    var key;
+    for (key in msg) {
+      out[key] = msg[key];
+    }
+
+    if (!out.action && msg.webhookAction) out.action = msg.webhookAction;
+
+    var raw = msg.webhookData;
+    if (typeof raw === "string" && raw !== "") {
+      if (raw.charAt(0) === "{") {
+        try {
+          var parsed = JSON.parse(raw);
+          for (key in parsed) {
+            if (out[key] === undefined) out[key] = parsed[key];
+          }
+        } catch (e) {
+          // fall through to the k=v form
+        }
+      } else {
+        var pairs = raw.split("&");
+        for (var i = 0; i < pairs.length; i++) {
+          var eq = pairs[i].indexOf("=");
+          if (eq > 0) {
+            var k = pairs[i].slice(0, eq);
+            if (out[k] === undefined) out[k] = pairs[i].slice(eq + 1);
+          }
+        }
+      }
+    }
+
+    return out;
+  }
+
+  PlayerRemote.prototype.command = function (raw) {
     if (!this.cfg.remoteControl) return;
 
+    var msg = normaliseCommand(raw);
     var action = String((msg && msg.action) || "").toLowerCase();
     if (!action) return;
 
