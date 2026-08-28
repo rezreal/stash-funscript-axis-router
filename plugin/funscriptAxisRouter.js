@@ -205,6 +205,7 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.webhookId = cfg.xtoysWebhookId;
     this.includePayload = cfg.includePayload;
     this.logged = {};
     this.onCommand = null;
@@ -270,7 +271,10 @@
 
     ws.onopen = function () {
       self.retries = 0;
-      console.log(LOG, "XToys socket open");
+      // name the webhook, so it can be compared against the one the XToys
+      // Webhook block is bound to - a manifest cannot carry that binding, so
+      // the two drifting apart looks exactly like nothing happening
+      console.log(LOG, "XToys socket open, webhook id: " + self.webhookId);
 
       if (self.hasToken && !self.acked) {
         clearTimeout(self.ackTimer);
