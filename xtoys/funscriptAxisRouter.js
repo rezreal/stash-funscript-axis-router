@@ -156,23 +156,27 @@ function clock(total) {
 }
 
 function onStatus(data) {
-  setVariable("videoTitle", data["trigger-title"] || "");
-  setVariable("videoPosition", data["trigger-position"] || "0");
-  setVariable("videoDuration", data["trigger-duration"] || "0");
-  setVariable("videoPlaying", data["trigger-playing"] || "0");
+  /* Display Controls. A Control's name is both the variable it shows and its
+   * label, so these are named for how they should read on screen: add an input
+   * Control called Scene, Elapsed, Channels or Playing and it displays that. */
+  setVariable("Scene", data["trigger-title"] || "");
+  setVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
 
   var pos = parseFloat(data["trigger-position"]) || 0;
   var dur = parseFloat(data["trigger-duration"]) || 0;
-  setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
-  setVariable("videoElapsed", clock(pos) + " / " + clock(dur));
+  setVariable("Elapsed", clock(pos) + " / " + clock(dur));
 
-  /* What this scene actually carries, so you can see which names are worth
-   * putting in the out1..outN Controls instead of guessing. Display it with a
-   * Control bound to videoChannels. */
+  /* Raw values too, for anything doing arithmetic rather than display. */
+  setVariable("videoPosition", data["trigger-position"] || "0");
+  setVariable("videoDuration", data["trigger-duration"] || "0");
+  setVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
+
+  /* Which channels this scene actually carries, so you can see what is worth
+   * putting in out1..outN rather than guessing. */
   var chans = data["trigger-channels"] || "";
   if (chans !== lastChannels) {
     lastChannels = chans;
-    setVariable("videoChannels", chans);
+    setVariable("Channels", chans);
     console.log("channels in this scene: " + (chans === "" ? "(none)" : chans));
   }
 }
@@ -250,8 +254,9 @@ registerTrigger({ type: "variableChange", variable: "Seek" },    onSeek);
 
 /* Controls the remote expects, so a missing one is obvious rather than just
  * being a button that does nothing. */
-var CONTROLS = "Play:push, Pause:push, Rewind:push, Forward:push, " +
-               "Seek:slider  |  advanced: skipSeconds:input, rampMs:input";
+var CONTROLS = "buttons: Play:push, Pause:push, Rewind:push, Forward:push, Seek:slider" +
+               "  |  display: Scene:input, Elapsed:input, Playing:input, Channels:input" +
+               "  |  advanced: skipSeconds:input, rampMs:input";
 
 /* ------------------------------------------------------------------ report */
 
