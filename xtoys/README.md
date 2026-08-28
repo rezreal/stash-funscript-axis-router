@@ -1,14 +1,38 @@
 # XToys script
 
-`funscriptAxisRouter.xtoys.json` is a starting-point XToys script that receives
-the plugin's messages and drives up to **8 generic outputs**, each following a
-funscript channel you name.
+Two ways to build the XToys side. **Prefer the JavaScript one.**
 
-> **Untested.** Everything else in this repo has tests behind it; this file does
-> not, because it runs on xtoys.app and there is no way to exercise it from here.
-> It is built by reading a known-good XToys script export, so the shapes are
-> right, but treat it as a draft to fix up in the XToys editor rather than
-> something known to work. Please report what needed changing.
+| File | What it is |
+|---|---|
+| [`funscriptAxisRouter.js`](funscriptAxisRouter.js) | Paste into the XToys **JS editor**. Recommended — nothing to import. |
+| [`funscriptAxisRouter.xtoys.json`](funscriptAxisRouter.xtoys.json) | The same thing as blocks and triggers, for building in the editor by hand. |
+
+Both drive up to **8 generic outputs**, each following a funscript channel you
+name.
+
+> **Untested.** Everything else in this repo has tests behind it; these do not,
+> because they run on xtoys.app. The shapes come from real script exports and the
+> official JS API docs, but treat them as drafts. Please report what needed
+> changing.
+
+## The JavaScript route
+
+XToys scripts can run custom JavaScript — the **JS** button in the toolbar while
+editing a Script. That sidesteps the import problem completely: paste
+`funscriptAxisRouter.js`, edit the `OUTPUTS` list at the top, done.
+
+It is also simply better suited. `registerTrigger(json, fn)` hands the callback
+*the whole message* as `trigger-<key>`, so a channel whose name you only typed in
+at runtime can be read directly — no static binding to work around. The
+`payload` field the plugin sends is only needed for the block-and-trigger route.
+
+Constraints, from the [JS docs](https://guide.xtoys.app/script-creation/javascript.html):
+**ES5 only**, run under JS-Interpreter, no DOM, and slower than native actions.
+The available helpers are `getVariable`, `setVariable`, `callAction`,
+`registerTrigger`, `getXhr`, `getConnectedBlocks`, `sleep` and `console.log`.
+
+There is no timer, and `sleep()` would block the interpreter, so the **watchdog
+has to be a Job** — see below.
 
 ## Is this file importable?
 

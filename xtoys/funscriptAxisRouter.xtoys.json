@@ -124,7 +124,7 @@
    "actions": [
     {
      "type": "customCode",
-     "code": "\nvar map = {};\ntry { map = JSON.parse(payload) || {}; } catch (e) { map = {}; }\n\n// case-insensitive, so \"Roll\" in the config box finds \"roll\" in the script\nvar lower = {};\nfor (var k in map) { if (map.hasOwnProperty(k)) lower[String(k).toLowerCase()] = map[k]; }\n\nfunction pick(name) {\n  if (!name) return null;\n  var v = lower[String(name).trim().toLowerCase()];\n  if (v === undefined || v === null || v === \"\") return null;\n  var n = parseFloat(v);\n  if (isNaN(n)) return null;\n  return Math.max(0, Math.min(100, Math.round(n)));\n}\n\nvar names = [channel1, channel2, channel3, channel4, channel5, channel6, channel7, channel8];\nvar out = [];\nfor (var i = 0; i < names.length; i++) {\n  var v = pick(names[i]);\n  out.push(v === null ? -1 : v);   // -1 means \"leave this output alone\"\n}\nsetVariables(out);\n",
+     "code": "\nvar map = {};\ntry { map = JSON.parse(payload) || {}; } catch (e) { map = {}; }\n\n// case-insensitive, so \"Roll\" in the config box finds \"roll\" in the script\nvar lower = {};\nfor (var k in map) { if (map.hasOwnProperty(k)) lower[String(k).toLowerCase()] = map[k]; }\n\nfunction pick(name) {\n  if (!name) return null;\n  var v = lower[String(name).trim().toLowerCase()];\n  if (v === undefined || v === null || v === \"\") return null;\n  var n = parseFloat(v);\n  if (isNaN(n)) return null;\n  return Math.max(0, Math.min(100, Math.round(n)));\n}\n\nvar names = [channel1, channel2, channel3, channel4, channel5, channel6, channel7, channel8];\nfor (var i = 0; i < names.length; i++) {\n  var v = pick(names[i]);\n  // -1 means \"leave this output alone\"\n  setVariable(\"out\" + (i + 1), v === null ? -1 : v);\n}\n",
      "variables": [
       {
        "name": "payload",
@@ -435,107 +435,94 @@
    }
   }
  },
- "queues": {},
+ "queues": [],
  "channels": {
   "webhook-a": {
+   "name": "stash",
    "type": "webhook",
    "outbound": false,
    "hideWebhookInfo": false
   },
   "generic-1-a": {
-   "name": null,
+   "name": "out1",
    "type": "generic-1"
   },
   "generic-1-b": {
-   "name": null,
+   "name": "out2",
    "type": "generic-1"
   },
   "generic-1-c": {
-   "name": null,
+   "name": "out3",
    "type": "generic-1"
   },
   "generic-1-d": {
-   "name": null,
+   "name": "out4",
    "type": "generic-1"
   },
   "generic-1-e": {
-   "name": null,
+   "name": "out5",
    "type": "generic-1"
   },
   "generic-1-f": {
-   "name": null,
+   "name": "out6",
    "type": "generic-1"
   },
   "generic-1-g": {
-   "name": null,
+   "name": "out7",
    "type": "generic-1"
   },
   "generic-1-h": {
-   "name": null,
+   "name": "out8",
    "type": "generic-1"
   }
  },
  "controls": [
   {
-   "id": "channel1",
-   "name": "Output 1 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel1",
+   "type": "input"
   },
   {
-   "id": "channel2",
-   "name": "Output 2 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel2",
+   "type": "input"
   },
   {
-   "id": "channel3",
-   "name": "Output 3 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel3",
+   "type": "input"
   },
   {
-   "id": "channel4",
-   "name": "Output 4 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel4",
+   "type": "input"
   },
   {
-   "id": "channel5",
-   "name": "Output 5 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel5",
+   "type": "input"
   },
   {
-   "id": "channel6",
-   "name": "Output 6 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel6",
+   "type": "input"
   },
   {
-   "id": "channel7",
-   "name": "Output 7 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel7",
+   "type": "input"
   },
   {
-   "id": "channel8",
-   "name": "Output 8 channel",
-   "type": "textbox",
-   "value": ""
+   "name": "channel8",
+   "type": "input"
   },
   {
-   "id": "rampMs",
-   "name": "Ramp (ms)",
-   "type": "textbox",
-   "value": "100"
+   "name": "rampMs",
+   "type": "input"
   },
   {
-   "id": "watchdogMs",
-   "name": "Heartbeat timeout (ms)",
-   "type": "textbox",
-   "value": "3000"
+   "name": "watchdogMs",
+   "type": "input"
   }
  ],
- "customFunctions": []
+ "controlPresets": [],
+ "media": {
+  "audio": {},
+  "voices": {},
+  "patterns": {}
+ },
+ "customFunctions": ""
 }

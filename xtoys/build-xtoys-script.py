@@ -18,8 +18,16 @@ LETTERS = "abcdefgh"
 # created at xtoys.app/me/custom-toys, point these at it instead. The type
 # string has to match whatever XToys calls that toy in a script export - export
 # a script with the toy attached and copy the name out of its "channels" map.
+# A Webhook block inside the script; its ID is the only credential.
 INPUT_CHANNEL = "webhook-a"
-INPUT_CHANNEL_DEF = {"type": "webhook", "outbound": False, "hideWebhookInfo": False}
+INPUT_CHANNEL_DEF = {"name": "stash", "type": "webhook", "outbound": False,
+                     "hideWebhookInfo": False}
+
+# To feed the script from a custom toy instead, swap in these two lines. The
+# type string is confirmed from a real export; the letter suffix must match
+# whichever slot your toy occupies.
+# INPUT_CHANNEL = "generic-custom-toy-b"
+# INPUT_CHANNEL_DEF = {"name": "stash", "type": "generic-custom-toy"}
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "funscriptAxisRouter.xtoys.json")
 
 
@@ -42,15 +50,13 @@ def set_volume(i, percent, ramp, condition=None):
 
 channels = {INPUT_CHANNEL: dict(INPUT_CHANNEL_DEF)}
 for i in range(1, N + 1):
-    channels[generic(i)] = {"name": None, "type": "generic-1"}
+    channels[generic(i)] = {"name": "out%d" % i, "type": "generic-1"}
 
-controls = [
-    {"id": "channel%d" % i, "name": "Output %d channel" % i, "type": "textbox", "value": ""}
-    for i in range(1, N + 1)
-]
+# A Control's name is the variable it sets, so these become {channel1}..{channelN}
+controls = [{"name": "channel%d" % i, "type": "input"} for i in range(1, N + 1)]
 controls += [
-    {"id": "rampMs", "name": "Ramp (ms)", "type": "textbox", "value": "100"},
-    {"id": "watchdogMs", "name": "Heartbeat timeout (ms)", "type": "textbox", "value": "3000"},
+    {"name": "rampMs", "type": "input"},
+    {"name": "watchdogMs", "type": "input"},
 ]
 
 initial = [{"type": "updateVariable", "variable": "out%d" % i, "value": "0"} for i in range(1, N + 1)]
@@ -80,12 +86,11 @@ function pick(name) {
 }
 
 var names = [%s];
-var out = [];
 for (var i = 0; i < names.length; i++) {
   var v = pick(names[i]);
-  out.push(v === null ? -1 : v);   // -1 means "leave this output alone"
+  // -1 means "leave this output alone"
+  setVariable("out" + (i + 1), v === null ? -1 : v);
 }
-setVariables(out);
 """ % ", ".join("channel%d" % i for i in range(1, N + 1))
 
 apply_vars = [{"name": "payload", "value": "trigger-payload", "expression": None}]
@@ -164,10 +169,12 @@ script = {
     "finalActions": [set_volume(i, "0", "0.1") for i in range(1, N + 1)],
     "globalTriggers": [axes_trigger, pause_trigger, heartbeat_trigger],
     "jobs": {"Watchdog": watchdog},
-    "queues": {},
+    "queues": [],
     "channels": channels,
     "controls": controls,
-    "customFunctions": [],
+    "controlPresets": [],
+    "media": {"audio": {}, "voices": {}, "patterns": {}},
+    "customFunctions": "",
 }
 
 with open(OUT, "w") as f:
