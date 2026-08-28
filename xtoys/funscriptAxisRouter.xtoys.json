@@ -518,27 +518,23 @@
    "type": "input"
   },
   {
-   "name": "btnPlay",
+   "name": "Play",
    "type": "push"
   },
   {
-   "name": "btnPause",
+   "name": "Pause",
    "type": "push"
   },
   {
-   "name": "btnToggle",
+   "name": "Rewind",
    "type": "push"
   },
   {
-   "name": "btnBack",
+   "name": "Forward",
    "type": "push"
   },
   {
-   "name": "btnFwd",
-   "type": "push"
-  },
-  {
-   "name": "seekPercent",
+   "name": "Seek",
    "type": "slider"
   },
   {

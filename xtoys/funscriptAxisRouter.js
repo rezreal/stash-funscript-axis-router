@@ -31,7 +31,7 @@ var WEBHOOK = "webhook-a";
  * out2, and so on. Comma separated, no spaces. */
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 var ACTION = "axes";         /* must match the plugin's Action Name setting */
-var RAMP_MS = 100;           /* smoothing between updates; ~one update interval */
+var RAMP_MS = 100;           /* fallback if the rampMs Control is empty */
 var CUSTOM_TOY_KEY = "a";    /* which key a custom toy's setValue writes to */
 var CONTROL_PREFIX = "out";  /* Controls named out1, out2, ... hold channel names */
 
@@ -71,6 +71,12 @@ function setOutput(toy, percent) {
   }
 }
 
+function rampSeconds() {
+  var v = parseFloat(getVariable("rampMs"));
+  if (isNaN(v) || v < 0) v = RAMP_MS;
+  return v / 1000;
+}
+
 function setOutputUnsafe(toy, percent) {
   if (toy.indexOf("generic-custom-toy") === 0) {
     callAction({
@@ -87,7 +93,7 @@ function setOutputUnsafe(toy, percent) {
     type: "updateComponent",
     channel: toy,
     action: "setVolume",
-    rampTime: RAMP_MS / 1000,
+    rampTime: rampSeconds(),
     percentVolume: String(percent)
   });
 }
@@ -121,7 +127,16 @@ function onAxes(data) {
 
 function onPause(data) {
   halted = String(data["trigger-pause"]) === "1";
-  if (halted) console.log("remote controls to add (name:type): " + CONTROLS);
+  if (halted) /* Seed the numeric Controls so they show real values instead of empty boxes. */
+function seed(name, value) {
+  var v = getVariable(name);
+  if (v === undefined || v === null || String(v) === "") setVariable(name, value);
+}
+
+seed("rampMs", RAMP_MS);
+seed("skipSeconds", 30);
+
+console.log("remote controls to add (name:type): " + CONTROLS);
 
 stopAll();
 }
@@ -169,9 +184,20 @@ var lastChannels = null;
  * UNVERIFIED: the Action shape for an outbound webhook message is not in the
  * docs. If the buttons do nothing, use 'Add XToys Action' in the JS editor with
  * the webhook block selected to get the real JSON and fix this one function. */
+var sendFailed = false;
+
 function sendToStash(msg) {
   msg.channel = WEBHOOK;
-  callAction(msg);
+  try {
+    callAction(msg);
+  } catch (e) {
+    if (!sendFailed) {
+      sendFailed = true;
+      console.log("sending to stash failed: " + e +
+                  " - use 'Add XToys Action' in this editor with the webhook " +
+                  "block selected to get the correct JSON, then fix sendToStash()");
+    }
+  }
 }
 
 function play()     { sendToStash({ type: "updateComponent", action: "send", data: { action: "play" } }); }
@@ -180,17 +206,16 @@ function toggle()   { sendToStash({ type: "updateComponent", action: "send", dat
 function skip(secs) { sendToStash({ type: "updateComponent", action: "send", data: { action: "skip", seconds: secs } }); }
 function seekPct(p) { sendToStash({ type: "updateComponent", action: "send", data: { action: "seek", percent: p } }); }
 
-function onBtnPlay()   { play(); }
-function onBtnPause()  { pause(); }
-function onBtnToggle() { toggle(); }
+function onPlay()  { play(); }
+function onPause() { pause(); }
 function skipAmount() {
   var v = parseFloat(getVariable("skipSeconds"));
   return isNaN(v) || v <= 0 ? 30 : v;
 }
 
-function onBtnBack()   { skip(-skipAmount()); }
-function onBtnFwd()    { skip(skipAmount()); }
-function onSeek()      { seekPct(parseFloat(getVariable("seekPercent")) || 0); }
+function onRewind()  { skip(-skipAmount()); }
+function onForward() { skip(skipAmount()); }
+function onSeek()    { seekPct(parseFloat(getVariable("Seek")) || 0); }
 
 /* ---------------------------------------------------------------- dispatch */
 
@@ -215,17 +240,18 @@ function onMessage(data) {
 
 registerTrigger({ type: "componentState", channel: WEBHOOK }, onMessage);
 
-registerTrigger({ type: "variableChange", variable: "btnPlay" },   onBtnPlay);
-registerTrigger({ type: "variableChange", variable: "btnPause" },  onBtnPause);
-registerTrigger({ type: "variableChange", variable: "btnToggle" }, onBtnToggle);
-registerTrigger({ type: "variableChange", variable: "btnBack" },   onBtnBack);
-registerTrigger({ type: "variableChange", variable: "btnFwd" },    onBtnFwd);
-registerTrigger({ type: "variableChange", variable: "seekPercent" }, onSeek);
+/* A Control's name is both the variable it sets and the text shown on it, so
+ * these are named for how they should read in the UI. */
+registerTrigger({ type: "variableChange", variable: "Play" },    onPlay);
+registerTrigger({ type: "variableChange", variable: "Pause" },   onPause);
+registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewind);
+registerTrigger({ type: "variableChange", variable: "Forward" }, onForward);
+registerTrigger({ type: "variableChange", variable: "Seek" },    onSeek);
 
 /* Controls the remote expects, so a missing one is obvious rather than just
  * being a button that does nothing. */
-var CONTROLS = "btnPlay:push,btnPause:push,btnToggle:push,btnBack:push," +
-               "btnFwd:push,seekPercent:slider,skipSeconds:input";
+var CONTROLS = "Play:push, Pause:push, Rewind:push, Forward:push, " +
+               "Seek:slider  |  advanced: skipSeconds:input, rampMs:input";
 
 /* ------------------------------------------------------------------ report */
 

@@ -62,12 +62,12 @@ controls += [
 # Remote controls. A Control's name is the variable it sets, and the script
 # triggers on that variable changing - so the names matter and the labels do not.
 controls += [
-    {"name": "btnPlay", "type": "push"},
-    {"name": "btnPause", "type": "push"},
-    {"name": "btnToggle", "type": "push"},
-    {"name": "btnBack", "type": "push"},
-    {"name": "btnFwd", "type": "push"},
-    {"name": "seekPercent", "type": "slider"},
+    {"name": "Play", "type": "push"},
+    {"name": "Pause", "type": "push"},
+    
+    {"name": "Rewind", "type": "push"},
+    {"name": "Forward", "type": "push"},
+    {"name": "Seek", "type": "slider"},
     {"name": "skipSeconds", "type": "input"},
 ]
 
