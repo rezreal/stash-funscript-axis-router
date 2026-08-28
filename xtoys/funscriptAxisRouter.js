@@ -4,13 +4,14 @@
  * in the top toolbar.
  *
  * Setup:
- *   1. Connect a Webhook block and one toy per output you want. Any toy type
- *      works; they are discovered, not hardcoded.
+ *   1. Connect a Webhook block and one toy per output you want, then set
+ *      WEBHOOK and TOYS below to their channel names. Both are in the
+ *      channels: {} section of your Script Export.
  *   2. Add an input Control per output, named out1, out2, out3, ...
  *   3. Type a funscript channel name into each - roll, pitch, e-stim, whatever
  *      your file contains. The stash plugin logs the channels it routes.
  *
- * Outputs are paired with the Controls in order: the first connected toy follows
+ * Outputs are paired with the Controls in order: the first toy in TOYS follows
  * out1, the second out2, and so on. The startup log prints the pairing.
  *
  * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow
@@ -19,7 +20,16 @@
 
 /* ------------------------------------------------------------------ config */
 
-var WEBHOOK = "";            /* "" = detect the webhook block automatically */
+/* Channel names, straight from the channels: {} section of your Script Export.
+ * These are NOT discovered: getConnectedBlocks() has been observed returning an
+ * object keyed by channel name in one script and a plain array in another, and
+ * calling callAction() with a channel that does not exist crashes XToys
+ * internally ("can't access property isToy"). Explicit is safer. */
+var WEBHOOK = "webhook-a";
+
+/* One entry per output, in order: the first follows Control out1, the second
+ * out2, and so on. Comma separated, no spaces. */
+var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 var ACTION = "axes";         /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;           /* smoothing between updates; ~one update interval */
 var CUSTOM_TOY_KEY = "a";    /* which key a custom toy's setValue writes to */
@@ -27,46 +37,14 @@ var CONTROL_PREFIX = "out";  /* Controls named out1, out2, ... hold channel name
 
 /* --------------------------------------------------------------- discovery */
 
-var blocks = {};
+var OUTS = TOYS === "" ? [] : TOYS.split(",");
+
+/* Reported for reference only - nothing depends on the shape it comes back in. */
 try {
-  blocks = getConnectedBlocks() || {};
+  console.log("connected blocks: " + JSON.stringify(getConnectedBlocks()));
 } catch (e) {
-  console.log("getConnectedBlocks() failed: " + e);
+  console.log("getConnectedBlocks() unavailable: " + e);
 }
-
-function findWebhook() {
-  if (WEBHOOK) return WEBHOOK;
-  var found = "";
-  var all = "";
-  for (var ch in blocks) {
-    all = all + ch + " ";
-    if (!found && ch.indexOf("webhook") === 0) found = ch;
-  }
-  if (!found) {
-    console.log("no webhook block among: " + all +
-                "- add a Webhook block and connect it to the script.");
-    return "webhook-a";
-  }
-  return found;
-}
-
-/* Every connected block except the webhook is an output, whatever type it is.
- * Built by concatenation rather than array push: JS-Interpreter is unreliable
- * with locally scoped arrays, but split() on a string works. */
-function findOutputs() {
-  var csv = "";
-  for (var ch in blocks) {
-    if (ch === WEBHOOK) continue;
-    if (ch.indexOf("webhook") === 0) continue;
-    csv = csv === "" ? ch : csv + "," + ch;
-  }
-  return csv;
-}
-
-WEBHOOK = findWebhook();
-
-var OUT_CSV = findOutputs();
-var OUTS = OUT_CSV === "" ? [] : OUT_CSV.split(",");
 
 /* --------------------------------------------------------------- internals */
 
@@ -85,6 +63,16 @@ function channelFor(i) {
  * percentVolume; a custom toy takes setValue with a key, as seen in a real
  * script export. Anything unrecognised is treated as a generic toy. */
 function setOutput(toy, percent) {
+  if (!toy) return;
+  try {
+    setOutputUnsafe(toy, percent);
+  } catch (e) {
+    console.log("could not drive '" + toy + "': " + e +
+                " - check it against the channels in your Script Export");
+  }
+}
+
+function setOutputUnsafe(toy, percent) {
   if (toy.indexOf("generic-custom-toy") === 0) {
     callAction({
       type: "updateComponent",
@@ -245,7 +233,7 @@ var CONTROLS = "btnPlay:push,btnPause:push,btnToggle:push,btnBack:push," +
 console.log("listening on '" + WEBHOOK + "'");
 
 if (OUTS.length === 0) {
-  console.log("no toys connected - connect one per output you want");
+  console.log("TOYS is empty - set it to your toy channel names");
 } else {
   var summary = "";
   for (var s = 0; s < OUTS.length; s++) {

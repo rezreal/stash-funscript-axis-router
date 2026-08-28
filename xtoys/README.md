@@ -16,6 +16,24 @@ name.
 > official JS API docs, but treat them as drafts. Please report what needed
 > changing.
 
+## Set the channel names by hand
+
+`WEBHOOK` and `TOYS` at the top of the script must match the `channels: {}`
+section of your Script Export. They are deliberately **not** discovered:
+`getConnectedBlocks()` has been seen returning an object keyed by channel name
+in one script and a plain array in another, and calling `callAction()` with a
+channel that does not exist crashes XToys internally with
+`can't access property "isToy"`.
+
+```js
+var WEBHOOK = "webhook-a";
+var TOYS = "generic-1-a,generic-1-b,generic-1-c";
+```
+
+The first toy in `TOYS` follows Control `out1`, the second `out2`, and so on. The
+startup log prints the pairing, and any output that cannot be driven is reported
+rather than taking the script down with it.
+
 ## Start here: the diagnostic
 
 Before wiring outputs, paste [`diagnostic.js`](diagnostic.js) into the JS editor
