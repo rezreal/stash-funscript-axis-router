@@ -199,6 +199,7 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.logged = {};
     this.onCommand = null;
     this.action = cfg.xtoysAction;
     this.heartbeatKey = cfg.heartbeatKey;
@@ -294,7 +295,10 @@
       }
       // XToys only sends these when the webhook connection has "Script can send
       // outbound messages" ticked, and only over a websocket.
-      if (parsed && self.onCommand) self.onCommand(parsed);
+      if (parsed && self.onCommand) {
+        console.log(LOG, "from XToys:", e.data);
+        self.onCommand(parsed);
+      }
     };
 
     ws.onerror = function () {
@@ -337,8 +341,19 @@
     }
 
     try {
+      var frame = JSON.stringify(payload);
+
+      // Log the first frame of each kind. Axis updates run at 10Hz, so logging
+      // every one is useless - but seeing one of each is exactly what you need
+      // to line the keys up with an XToys script.
+      var kind = payload.action || "(no action)";
+      if (!this.logged[kind]) {
+        this.logged[kind] = true;
+        console.log(LOG, "first " + kind + " frame:", frame);
+      }
+
       // the trailing newline is part of the protocol, not cosmetic
-      this.ws.send(JSON.stringify(payload) + "\n");
+      this.ws.send(frame + "\n");
     } catch (e) {
       console.error(LOG, "XToys send failed", e);
     }

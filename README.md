@@ -236,7 +236,21 @@ Open the browser console. The plugin logs on load, and each stage after it:
 [funscript-axis-router] interactive client ready
 [funscript-axis-router] loading http://.../scene/42/funscript
 [funscript-axis-router] routing 3 axis/axes: roll, pitch, stroke
+[funscript-axis-router] first status frame: {"title":"My Scene",...,"action":"status"}
+[funscript-axis-router] first axes frame: {"roll":"50",...,"action":"axes"}
 ```
+
+The `first … frame` lines print once per message kind — axis updates run at 10 Hz,
+so logging every one would be useless, but seeing one of each is what you need to
+line the keys up with an XToys script. Inbound remote-control commands are logged
+as `from XToys: …`.
+
+**"XToys acknowledged the connection" but nothing in the Network tab.** The
+connection is fine — that line is only logged when XToys sends `{"success":true}`
+*back*, which cannot happen without an established socket. DevTools only records
+requests made while it is open, and the plugin connects during page load: open
+DevTools first, hard-reload, then filter by **WS**. The entry's *Messages* tab
+shows frames live.
 
 **No "XToys socket open" at all.** The socket is opened as soon as the plugin
 loads, so this means the plugin did not load or has no webhook ID. Check it
