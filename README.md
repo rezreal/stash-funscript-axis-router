@@ -36,14 +36,35 @@ Configure under **Settings > Plugins > Funscript Axis Router**.
    a token, put that in *XToys Token*.
 3. Have your script read the channel names your funscript uses.
 
+### A ready-made script
+
+[`xtoys/funscriptAxisRouter.xtoys.json`](xtoys/) is a starting-point XToys script
+with **8 generic outputs**, each following a funscript channel you name in its
+config. See [xtoys/README.md](xtoys/README.md). It is untested — unlike the rest
+of this repo, it cannot be exercised from outside XToys.
+
 ### Messages
 
-One newline-terminated JSON object per update, keyed by channel, values `0`–`100`
-as strings:
+One newline-terminated JSON object per update:
 
 ```
-{"roll":"62","pitch":"41"}\n
+{"roll":"62","pitch":"41","payload":"{\"roll\":\"62\",\"pitch\":\"41\"}","action":"axes"}\n
 ```
+
+Channels appear as flat keys, values `0`–`100` as strings. Two envelope fields
+travel with them:
+
+- **`action`** — which trigger fires inside an XToys script. Axis updates use the
+  configured name (`axes` by default); pause and heartbeat messages use `pause`
+  and `heartbeat`, so a script can react to each separately.
+- **`payload`** — the same channel map repeated as one JSON string. An XToys
+  trigger binds incoming keys statically as `trigger-<key>`, which cannot express
+  "read whatever channel the user typed into a config box", so a script parses
+  this instead and indexes it by name at runtime.
+
+Set *XToys Action Name* to blank to drop the envelope and send bare
+`{"roll":"62"}`, which is what a **custom toy** expects. Channels named `action`
+or `payload` are skipped with a console warning while the envelope is on.
 
 **Channel names are taken verbatim from the funscript.** A v2.0 file with
 `channels: { roll: …, "e-stim": … }` sends `roll` and `e-stim`; a v1.1 file with
@@ -83,6 +104,7 @@ usually a wrong token.
 | Route Stroke Axis Here | off | See *Who drives the stroke axis* below. |
 | XToys Webhook ID | — | Blank disables routing entirely. |
 | XToys Token | — | Only for a custom toy; sent as `?token=`. See *About the token* above. |
+| XToys Action Name | `axes` | Which script trigger fires. Blank sends bare channel/value pairs. |
 | Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
 | Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
 | Heartbeat Interval (ms) | `1000` | Make your script's timeout 2–3× this. |

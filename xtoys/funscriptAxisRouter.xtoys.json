@@ -1,0 +1,541 @@
+{
+ "initialActions": [
+  {
+   "type": "updateVariable",
+   "variable": "out1",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out2",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out3",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out4",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out5",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out6",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out7",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "out8",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "halted",
+   "value": "0"
+  },
+  {
+   "type": "updateVariable",
+   "variable": "lastBeat",
+   "value": "0"
+  },
+  {
+   "type": "updateJob",
+   "job": "Watchdog",
+   "action": "start",
+   "restart": false
+  }
+ ],
+ "finalActions": [
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-a",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-b",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-c",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-d",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-e",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-f",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-g",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  },
+  {
+   "type": "updateComponent",
+   "action": "setVolume",
+   "channel": "generic-1-h",
+   "rampTime": "0.1",
+   "percentVolume": "0"
+  }
+ ],
+ "globalTriggers": [
+  {
+   "type": "componentState",
+   "channel": "webhook-a",
+   "action": "axes",
+   "parsedAction": "axes",
+   "actions": [
+    {
+     "type": "customCode",
+     "code": "\nvar map = {};\ntry { map = JSON.parse(payload) || {}; } catch (e) { map = {}; }\n\n// case-insensitive, so \"Roll\" in the config box finds \"roll\" in the script\nvar lower = {};\nfor (var k in map) { if (map.hasOwnProperty(k)) lower[String(k).toLowerCase()] = map[k]; }\n\nfunction pick(name) {\n  if (!name) return null;\n  var v = lower[String(name).trim().toLowerCase()];\n  if (v === undefined || v === null || v === \"\") return null;\n  var n = parseFloat(v);\n  if (isNaN(n)) return null;\n  return Math.max(0, Math.min(100, Math.round(n)));\n}\n\nvar names = [channel1, channel2, channel3, channel4, channel5, channel6, channel7, channel8];\nvar out = [];\nfor (var i = 0; i < names.length; i++) {\n  var v = pick(names[i]);\n  out.push(v === null ? -1 : v);   // -1 means \"leave this output alone\"\n}\nsetVariables(out);\n",
+     "variables": [
+      {
+       "name": "payload",
+       "value": "trigger-payload",
+       "expression": null
+      },
+      {
+       "name": "channel1",
+       "value": "channel1",
+       "expression": null
+      },
+      {
+       "name": "channel2",
+       "value": "channel2",
+       "expression": null
+      },
+      {
+       "name": "channel3",
+       "value": "channel3",
+       "expression": null
+      },
+      {
+       "name": "channel4",
+       "value": "channel4",
+       "expression": null
+      },
+      {
+       "name": "channel5",
+       "value": "channel5",
+       "expression": null
+      },
+      {
+       "name": "channel6",
+       "value": "channel6",
+       "expression": null
+      },
+      {
+       "name": "channel7",
+       "value": "channel7",
+       "expression": null
+      },
+      {
+       "name": "channel8",
+       "value": "channel8",
+       "expression": null
+      }
+     ],
+     "resultVar": "result",
+     "storeResult": false
+    },
+    {
+     "type": "updateVariable",
+     "variable": "lastBeat",
+     "value": "0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-a",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out1}",
+     "condition": "{out1} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-b",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out2}",
+     "condition": "{out2} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-c",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out3}",
+     "condition": "{out3} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-d",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out4}",
+     "condition": "{out4} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-e",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out5}",
+     "condition": "{out5} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-f",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out6}",
+     "condition": "{out6} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-g",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out7}",
+     "condition": "{out7} >= 0 && {halted} == 0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-h",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "{out8}",
+     "condition": "{out8} >= 0 && {halted} == 0"
+    }
+   ]
+  },
+  {
+   "type": "componentState",
+   "channel": "webhook-a",
+   "action": "pause",
+   "parsedAction": "pause",
+   "variables": [
+    {
+     "name": "paused",
+     "value": "trigger-pause",
+     "expression": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "updateVariable",
+     "variable": "halted",
+     "value": "{paused}"
+    },
+    {
+     "type": "updateVariable",
+     "variable": "lastBeat",
+     "value": "0"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-a",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-b",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-c",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-d",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-e",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-f",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-g",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    },
+    {
+     "type": "updateComponent",
+     "action": "setVolume",
+     "channel": "generic-1-h",
+     "rampTime": "{rampMs}/1000",
+     "percentVolume": "0",
+     "condition": "{paused} == 1"
+    }
+   ]
+  },
+  {
+   "type": "componentState",
+   "channel": "webhook-a",
+   "action": "heartbeat",
+   "parsedAction": "heartbeat",
+   "actions": [
+    {
+     "type": "updateVariable",
+     "variable": "lastBeat",
+     "value": "0"
+    }
+   ]
+  }
+ ],
+ "jobs": {
+  "Watchdog": {
+   "steps": {
+    "START": {
+     "actions": [],
+     "triggers": [
+      {
+       "type": "timer",
+       "amount": "0.5",
+       "actions": [
+        {
+         "type": "updateVariable",
+         "variable": "lastBeat",
+         "value": "{lastBeat}+500"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-a",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-b",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-c",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-d",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-e",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-f",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-g",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        },
+        {
+         "type": "updateComponent",
+         "action": "setVolume",
+         "channel": "generic-1-h",
+         "rampTime": "0.1",
+         "percentVolume": "0",
+         "condition": "{lastBeat} > {watchdogMs}"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ },
+ "queues": {},
+ "channels": {
+  "webhook-a": {
+   "type": "webhook",
+   "outbound": false,
+   "hideWebhookInfo": false
+  },
+  "generic-1-a": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-b": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-c": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-d": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-e": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-f": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-g": {
+   "name": null,
+   "type": "generic-1"
+  },
+  "generic-1-h": {
+   "name": null,
+   "type": "generic-1"
+  }
+ },
+ "controls": [
+  {
+   "id": "channel1",
+   "name": "Output 1 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel2",
+   "name": "Output 2 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel3",
+   "name": "Output 3 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel4",
+   "name": "Output 4 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel5",
+   "name": "Output 5 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel6",
+   "name": "Output 6 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel7",
+   "name": "Output 7 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "channel8",
+   "name": "Output 8 channel",
+   "type": "textbox",
+   "value": ""
+  },
+  {
+   "id": "rampMs",
+   "name": "Ramp (ms)",
+   "type": "textbox",
+   "value": "100"
+  },
+  {
+   "id": "watchdogMs",
+   "name": "Heartbeat timeout (ms)",
+   "type": "textbox",
+   "value": "3000"
+  }
+ ],
+ "customFunctions": []
+}

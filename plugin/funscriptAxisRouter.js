@@ -38,6 +38,12 @@
 
   var STROKE_AXIS = "L0";
 
+  // Envelope fields. An XToys script trigger dispatches on "action", and
+  // "payload" carries the whole channel map as a JSON string so a script can
+  // look up a channel whose name it only learns at runtime. A channel with one
+  // of these names would collide, so it is skipped.
+  var RESERVED = { action: true, payload: true };
+
   function canonicalAxis(key) {
     return AXIS_ALIASES[String(key).toLowerCase()] || null;
   }
@@ -193,6 +199,7 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.action = cfg.xtoysAction;
     this.heartbeatKey = cfg.heartbeatKey;
     this.heartbeatMs = cfg.heartbeatMs;
     this.heartbeatTimer = null;
@@ -227,7 +234,7 @@
     this.heartbeatTimer = setInterval(function () {
       var beat = {};
       beat[self.heartbeatKey] = 1;
-      self.send(beat);
+      self.send(beat, "heartbeat");
     }, this.heartbeatMs);
   };
 
@@ -306,13 +313,23 @@
     }, delay);
   };
 
-  XToysSink.prototype.send = function (values) {
+  XToysSink.prototype.send = function (values, action) {
     if (!this.ws || this.ws.readyState !== 1) return;
 
     var payload = {};
     Object.keys(values).forEach(function (k) {
       payload[k] = String(values[k]);
     });
+
+    // A script's webhook trigger matches on "action" and binds the other keys as
+    // trigger-<key> variables. Those bindings are static, so a script cannot read
+    // a channel whose name the user only types into a config box - "payload"
+    // repeats the same map as one JSON string, which a script can parse and index
+    // by any name at runtime. A custom toy ignores both and reads the flat keys.
+    if (this.action) {
+      payload.payload = JSON.stringify(payload);
+      payload.action = action || this.action;
+    }
 
     try {
       // the trailing newline is part of the protocol, not cosmetic
@@ -364,6 +381,13 @@
       // Handy in play nothing else would, so route it like any other axis.
       if (ax.stroke && !cfg.routeStroke) return;
       if (!matchesFilter(cfg.only, ax.key, ax.id)) return;
+      if (RESERVED[ax.key.toLowerCase()]) {
+        console.warn(
+          LOG,
+          'skipping channel "' + ax.key + '": that name is reserved by the message envelope'
+        );
+        return;
+      }
       picked.push(ax);
     });
 
@@ -388,7 +412,7 @@
     // Paired with the pause event below, so a script that halted on pause has
     // something to resume on. The timer guard above means this fires once per
     // real transition, not on every play() the player emits.
-    if (this.cfg.pauseKey) this.sink.send(pauseEvent(this.cfg.pauseKey, false));
+    if (this.cfg.pauseKey) this.sink.send(pauseEvent(this.cfg.pauseKey, false), "pause");
 
     var self = this;
     this.timer = setInterval(function () {
@@ -422,7 +446,7 @@
       this.sink.send(this.last);
     }
 
-    if (pauseKey) this.sink.send(pauseEvent(pauseKey, true));
+    if (pauseKey) this.sink.send(pauseEvent(pauseKey, true), "pause");
 
     this.last = null;
   };
@@ -624,6 +648,9 @@
       routeStrokeAxis: routeStrokeAxis,
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
       xtoysToken: String(raw.xtoysToken || "").trim(),
+      xtoysAction: String(
+        raw.xtoysAction === undefined || raw.xtoysAction === null ? "axes" : raw.xtoysAction
+      ).trim(),
       stopValue: stopValue,
       pauseKey: pauseKey,
       heartbeatKey: heartbeatKey,
