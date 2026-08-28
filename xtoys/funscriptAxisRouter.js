@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "d171210a";             /* content hash, stamped by stamp.mjs */
+var BUILD = "9193756e";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -66,7 +66,8 @@ function numVar(name, fallback) {
   return isNaN(v) || v < 0 ? fallback : v;
 }
 
-/* Read live so editing a Control takes effect without reloading the script. */
+/* Read live so editing a Control takes effect without reloading the script.
+ * Reads the Control whose id is out1, out2, ... - not its label. */
 function channelFor(i) {
   var v = getVariable(CONTROL_PREFIX + (i + 1));
   if (v === undefined || v === null) return "";
@@ -152,8 +153,8 @@ function clock(total) {
   return m + ":" + (sec < 10 ? "0" : "") + sec;
 }
 
-/* A Control reflects its variable and is labelled with its own name, so adding
- * an input Control called Scene, Elapsed, Playing or Channels displays it. */
+/* Shown by any Control whose `id` is one of these names. The label is separate,
+ * so "Channels in scene" can display the variable `Channels`. */
 function onStatus(data) {
   setUiVariable("Scene", data["trigger-title"] || "");
   setUiVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
@@ -257,7 +258,9 @@ function onMessage(data) {
 
 registerTrigger({ type: "componentState", channel: WEBHOOK, action: "*" }, onMessage);
 
-/* A Control's name is both its variable and its on-screen label. */
+/* A Control's `id` is the variable it reads and writes; `name` is only its
+ * label. A Control with just a name binds to an auto-generated id instead, so
+ * these ids are what matter and the labels are free to read nicely. */
 registerTrigger({ type: "variableChange", variable: "Play" },    onPlayButton);
 registerTrigger({ type: "variableChange", variable: "Pause" },   onPauseButton);
 registerTrigger({ type: "variableChange", variable: "Rewind" },  onRewindButton);

@@ -26,6 +26,19 @@ the stamp and the content disagree.
 > to end. The remote buttons are not: the outbound Action shape comes from
 > `Add XToys Action` but has never been seen to arrive.
 
+## Controls bind by `id`, not by name
+
+A Control's **`id`** is the variable it reads and writes; **`name`** is only its
+on-screen label:
+
+```json
+{ "id": "out1", "name": "Output 1 channel", "type": "input" }
+```
+
+A Control carrying only a `name` binds to an auto-generated id instead, so the
+script writes `Scene` and nothing displays it, and reads `out1` and gets nothing
+back. If you add Controls by hand, the id is the part that has to match.
+
 ## Set the channel names by hand
 
 `WEBHOOK` and `TOYS` at the top of the script must match the `channels: {}`
