@@ -55,27 +55,26 @@ channel can be called anything without colliding with the protocol.
 
 ### About the token
 
-XToys documents custom-toy auth as an HTTP header:
+A **custom toy** gives you a token; pass it in *XToys Token* and it is sent as a
+query parameter:
 
 ```
-Authorization: Bearer <token>
+wss://webhook.xtoys.app/<webhookId>?token=<token>
 ```
 
-**A browser cannot set headers on a WebSocket.** That is a limitation of the
-browser API, not something this plugin can work around, and it is the one part
-of this integration that may not work from a UI-only plugin.
+XToys documents custom-toy auth as an `Authorization: Bearer` header, but a
+browser cannot set headers on a WebSocket. The query parameter is what works
+from one — as demonstrated by [knock-rod](https://github.com/rezreal/knock-rod),
+which drives XToys from the browser this way.
 
-So when a token is set we offer it over the two channels a browser *does* have,
-in order, and keep whichever the server accepts:
+A **webhook block inside a script** needs no token, so leaving the field blank is
+equally valid.
 
-1. as a subprotocol — `Sec-WebSocket-Protocol: Bearer, <token>`
-2. as a query parameter — `?token=<token>`
-3. no token at all
-
-The browser console logs which one connected (`XToys connected (auth: …)`) and
-warns each time one is rejected. A **webhook block inside a script** appears to
-need no token at all, so if the token route fails, that is the fallback that is
-known to work from a browser.
+On a good connection XToys replies `{"success": true}`. That is logged as
+`XToys acknowledged the connection`. Sending is not gated on it, since a
+tokenless webhook may never send one, but if you set a token and no
+acknowledgement arrives within 5 seconds a warning appears in the console —
+usually a wrong token.
 
 ## Settings
 
@@ -83,7 +82,7 @@ known to work from a browser.
 |---|---|---|
 | Stroke Axis Owner | `auto` | `auto`, `router` or `handy` — see below. |
 | XToys Webhook ID | — | Blank disables routing entirely. |
-| XToys Token | — | Only for a custom toy. See *About the token* above. |
+| XToys Token | — | Only for a custom toy; sent as `?token=`. See *About the token* above. |
 | Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |

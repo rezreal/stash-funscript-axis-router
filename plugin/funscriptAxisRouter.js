@@ -189,32 +189,25 @@
   // whatever your script reads. We send one key per routed axis, value 0-100 as
   // a string:  {"roll":"62","pitch":"41"}\n
   //
-  // Auth is awkward. XToys documents a custom toy as
-  //   Authorization: Bearer <token>
-  // but a browser cannot set headers on a WebSocket, so we cannot send that.
-  // The two channels a browser does have are the subprotocol list and the query
-  // string, and a webhook block in a script appears to need no token at all. We
-  // try them in order and pin whichever one opens - see README.
-  function authAttempts(baseUrl, token) {
-    if (!token) return [{ name: "none", url: baseUrl, protocols: undefined }];
-    return [
-      { name: "subprotocol", url: baseUrl, protocols: ["Bearer", token] },
-      {
-        name: "query",
-        url: baseUrl + (baseUrl.indexOf("?") === -1 ? "?" : "&") +
-             "token=" + encodeURIComponent(token),
-        protocols: undefined,
-      },
-      { name: "none", url: baseUrl, protocols: undefined },
-    ];
-  }
+  // The token goes in the query string. XToys documents an Authorization header
+  // for custom toys, but a browser cannot set headers on a WebSocket; ?token=
+  // is what actually works from one. A webhook block inside a script needs no
+  // token at all, so leaving it blank is valid.
+  //
+  // On a good connection the server sends back {"success": true}. We do not gate
+  // sending on it - a tokenless script webhook may never send one - but we do
+  // report it, and warn if a token was given and no acknowledgement arrives.
+  var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
-    this.baseUrl = "wss://webhook.xtoys.app/" + cfg.xtoysWebhookId;
-    this.attempts = authAttempts(this.baseUrl, cfg.xtoysToken);
-    this.attempt = 0;
-    this.pinned = false;
+    this.url =
+      "wss://webhook.xtoys.app/" +
+      cfg.xtoysWebhookId +
+      (cfg.xtoysToken ? "?token=" + encodeURIComponent(cfg.xtoysToken) : "");
+    this.hasToken = !!cfg.xtoysToken;
     this.ws = null;
+    this.acked = false;
+    this.ackTimer = null;
     this.retries = 0;
     this.retryTimer = null;
     this.closed = true;
@@ -229,48 +222,59 @@
     if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
 
     var self = this;
-    var a = this.attempts[this.attempt];
-    var opened = false;
     var ws;
-
     try {
-      ws = a.protocols ? new WebSocket(a.url, a.protocols) : new WebSocket(a.url);
+      ws = new WebSocket(this.url);
     } catch (e) {
-      console.error(LOG, "XToys connect failed (" + a.name + ")", e);
-      this.nextAttempt();
+      console.error(LOG, "XToys connect failed", e);
       this.scheduleRetry();
       return;
     }
 
     this.ws = ws;
+
     ws.onopen = function () {
-      opened = true;
       self.retries = 0;
-      if (!self.pinned) {
-        self.pinned = true;
-        console.log(LOG, "XToys connected (auth: " + a.name + ")");
+      console.log(LOG, "XToys socket open");
+
+      if (self.hasToken && !self.acked) {
+        clearTimeout(self.ackTimer);
+        self.ackTimer = setTimeout(function () {
+          if (!self.acked) {
+            console.warn(
+              LOG,
+              "XToys did not acknowledge the connection within " +
+                ACK_TIMEOUT_MS / 1000 +
+                "s - the token may be wrong, or this webhook may not need one."
+            );
+          }
+        }, ACK_TIMEOUT_MS);
       }
     };
+
+    ws.onmessage = function (e) {
+      var parsed;
+      try {
+        parsed = JSON.parse(e.data);
+      } catch (_err) {
+        return;
+      }
+      if (parsed && parsed.success === true && !self.acked) {
+        self.acked = true;
+        clearTimeout(self.ackTimer);
+        console.log(LOG, "XToys acknowledged the connection");
+      }
+    };
+
     ws.onerror = function () {
       // onclose always follows; the retry decision is made there
     };
+
     ws.onclose = function () {
       self.ws = null;
-      // Closing without ever opening means this auth channel was rejected, so
-      // move on to the next one. A drop after a good connection is just a drop.
-      if (!opened && !self.pinned) self.nextAttempt();
+      clearTimeout(self.ackTimer);
       if (!self.closed) self.scheduleRetry();
     };
-  };
-
-  XToysSink.prototype.nextAttempt = function () {
-    if (this.attempt < this.attempts.length - 1) {
-      this.attempt++;
-      console.warn(
-        LOG,
-        "XToys rejected the connection, trying auth: " + this.attempts[this.attempt].name
-      );
-    }
   };
 
   XToysSink.prototype.scheduleRetry = function () {

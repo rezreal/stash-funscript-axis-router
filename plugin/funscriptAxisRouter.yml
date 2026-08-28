@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.3.0
+version: 0.4.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -32,11 +32,10 @@ settings:
   xtoysToken:
     displayName: XToys Token
     description: >-
-      Bearer token for an XToys custom toy. Leave blank for a webhook block in a
-      script, which needs no token. Note that browsers cannot set the
-      Authorization header XToys documents, so the token is offered over the
-      subprotocol and then the query string, and whichever the server accepts is
-      used. Check the browser console to see which one connected.
+      Token for an XToys custom toy, sent as ?token= on the websocket URL. Leave
+      blank for a webhook block in a script, which needs no token. On a good
+      connection XToys replies with an acknowledgement, logged to the browser
+      console; a warning appears there if none arrives.
     type: STRING
   stopValue:
     displayName: Stop Value

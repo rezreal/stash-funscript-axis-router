@@ -400,26 +400,47 @@ console.log("\nstop value");
      ["pitch=0","roll=0","stroke=0"]);
 }
 
-// ---- 19. token auth fallback --------------------------------------------
+// ---- 19. token auth ------------------------------------------------------
 console.log("\ntoken auth");
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK" });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  eq("first attempt offers the token as a subprotocol", e.conns[0].protocols, ["Bearer", "TOK"]);
-  eq("first attempt keeps the plain url", e.conns[0].url, "wss://webhook.xtoys.app/abc");
+  eq("token goes in the query string", e.conns[0].url, "wss://webhook.xtoys.app/abc?token=TOK");
+  eq("no subprotocol is used", e.conns[0].protocols, undefined);
 }
 {
-  // server refuses every connection: must walk subprotocol -> query -> none
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK" });
-  e.FakeWS.rejectAll = true;
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "a b/c&d" });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  for (let i = 0; i < 3; i++) { e.FakeWS.lastRetry && e.FakeWS.lastRetry(); await new Promise(r => setTimeout(r, 1200)); }
-  const names = e.conns.map(c => c.protocols ? "subprotocol" : (c.url.includes("token=") ? "query" : "none"));
-  ok("tries subprotocol first", names[0] === "subprotocol", names);
-  ok("falls back to query", names.includes("query"), names);
-  e.FakeWS.rejectAll = false;
+  eq("token is url-encoded", e.conns[0].url, "wss://webhook.xtoys.app/abc?token=a%20b%2Fc%26d");
+}
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  eq("no token means no query string", e.conns[0].url, "wss://webhook.xtoys.app/abc");
+}
+
+// ---- 20. server acknowledgement -----------------------------------------
+console.log("\nserver ack");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK" });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  const ws = e.FakeWS.last;
+  ok("socket exposes onmessage", typeof ws.onmessage === "function");
+  ws.onmessage({ data: JSON.stringify({ success: true }) });
+  ok("ack handled without throwing", true);
+  ws.onmessage({ data: "not json at all" });
+  ok("malformed server data is ignored", true);
+
+  // sending must not be gated on the ack - a tokenless webhook never sends one
+  const n = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
+  await n.client.uploadScript("u"); await n.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  n.player.t = 0.5; n.tick();
+  ok("frames flow without any ack", n.sent.length > 0);
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");
