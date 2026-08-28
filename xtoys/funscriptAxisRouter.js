@@ -39,12 +39,11 @@ var CONTROL_PREFIX = "out";  /* Controls named out1, out2, ... hold channel name
 
 var OUTS = TOYS === "" ? [] : TOYS.split(",");
 
-/* Reported for reference only - nothing depends on the shape it comes back in. */
-try {
-  console.log("connected blocks: " + JSON.stringify(getConnectedBlocks()));
-} catch (e) {
-  console.log("getConnectedBlocks() unavailable: " + e);
-}
+/* getConnectedBlocks() is deliberately not called. What it returns is a native
+ * object the interpreter will not marshal - JSON.stringify on it yields
+ * "[object Object],getConnectedBlocks" and raises "Object is not pseudo" - and
+ * its shape is inconsistent between scripts anyway. Read your channel names off
+ * the Script Export instead. */
 
 /* --------------------------------------------------------------- internals */
 
