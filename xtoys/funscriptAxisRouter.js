@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var VERSION = "0.9.3";      /* logged on start, so you can see what is loaded */
+var VERSION = "0.9.4";      /* logged on start, so you can see what is loaded */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -40,7 +40,7 @@ var OUTS = TOYS === "" ? [] : TOYS.split(",");
 /* --------------------------------------------------------------- internals */
 
 var halted = false;
-var announced = false;
+var announced = "";
 var lastChannels = null;
 var sendFailed = false;
 
@@ -208,11 +208,16 @@ function onSeekControl()   { send("seek", { percent: numVar("Seek", 0) }); }
  * which is what made this silent for so long. Dispatching in JavaScript keeps
  * it to a single trigger that cannot double-fire. */
 function onMessage(data) {
-  if (!announced) {
-    announced = true;
+  var action = String(data["trigger-action"] || "");
+
+  /* Log the first of each kind. The wildcard also catches XToys' own session
+   * events - a join arrives before anything of ours - so announcing only the
+   * very first message reported something irrelevant and then went quiet. */
+  if (announced.indexOf("|" + action + "|") === -1) {
+    announced = announced + "|" + action + "|";
     var body = "";
     for (var k in data) { body = body + k + "=" + data[k] + "  "; }
-    console.log("first message: " + body);
+    console.log("first '" + action + "' message: " + body);
   }
 
   /* Feeds the Watchdog Job, which is the deadman switch: JavaScript has no
@@ -220,7 +225,6 @@ function onMessage(data) {
    * browser goes away the Job drives everything to zero. */
   setVariable("lastBeat", 0);
 
-  var action = String(data["trigger-action"] || "");
   if (action === ACTION) onAxes(data);
   else if (action === "pause") onPauseMessage(data);
   else if (action === "status") onStatus(data);
