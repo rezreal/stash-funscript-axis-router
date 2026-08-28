@@ -1,0 +1,99 @@
+{
+  "initialActions": [
+    {
+      "job": "Main",
+      "type": "updateJob",
+      "action": "start"
+    }
+  ],
+  "finalActions": [],
+  "globalTriggers": [],
+  "jobs": {
+    "Main": {
+      "steps": {
+        "START": {
+          "actions": [],
+          "triggers": []
+        }
+      }
+    }
+  },
+  "queues": [],
+  "channels": {
+    "webhook-a": {
+      "name": "stash",
+      "type": "webhook",
+      "outbound": true,
+      "hideWebhookInfo": false
+    },
+    "generic-1-a": {
+      "name": "out1",
+      "type": "generic-1"
+    },
+    "generic-1-b": {
+      "name": "out2",
+      "type": "generic-1"
+    },
+    "generic-1-c": {
+      "name": "out3",
+      "type": "generic-1"
+    },
+    "generic-custom-toy-b": {
+      "name": "stash",
+      "type": "generic-custom-toy"
+    }
+  },
+  "controls": [
+    {
+      "name": "out1",
+      "type": "input"
+    },
+    {
+      "name": "out2",
+      "type": "input"
+    },
+    {
+      "name": "out3",
+      "type": "input"
+    },
+    {
+      "name": "out4",
+      "type": "input"
+    },
+    {
+      "name": "btnPlay",
+      "type": "push"
+    },
+    {
+      "name": "btnPause",
+      "type": "push"
+    },
+    {
+      "name": "btnToggle",
+      "type": "push"
+    },
+    {
+      "name": "btnBack",
+      "type": "push"
+    },
+    {
+      "name": "btnFwd",
+      "type": "push"
+    },
+    {
+      "name": "seekPercent",
+      "type": "slider"
+    },
+    {
+      "name": "skipSeconds",
+      "type": "input"
+    }
+  ],
+  "controlPresets": [],
+  "media": {
+    "audio": {},
+    "voices": {},
+    "patterns": {}
+  },
+  "customFunctions": "/* Funscript Axis Router - XToys side\n *\n * Paste into the XToys JavaScript editor: open the Script, then the JS button\n * in the top toolbar.\n *\n * Setup:\n *   1. Connect a Webhook block and one toy per output you want. Any toy type\n *      works; they are discovered, not hardcoded.\n *   2. Add an input Control per output, named out1, out2, out3, ...\n *   3. Type a funscript channel name into each - roll, pitch, e-stim, whatever\n *      your file contains. The stash plugin logs the channels it routes.\n *\n * Outputs are paired with the Controls in order: the first connected toy follows\n * out1, the second out2, and so on. The startup log prints the pairing.\n *\n * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow\n * functions, no template literals, no anonymous nested functions, no DOM.\n */\n\n/* ------------------------------------------------------------------ config */\n\nvar WEBHOOK = \"\";            /* \"\" = detect the webhook block automatically */\nvar ACTION = \"axes\";         /* must match the plugin's Action Name setting */\nvar RAMP_MS = 100;           /* smoothing between updates; ~one update interval */\nvar CUSTOM_TOY_KEY = \"a\";    /* which key a custom toy's setValue writes to */\nvar CONTROL_PREFIX = \"out\";  /* Controls named out1, out2, ... hold channel names */\n\n/* --------------------------------------------------------------- discovery */\n\nvar blocks = {};\ntry {\n  blocks = getConnectedBlocks() || {};\n} catch (e) {\n  console.log(\"getConnectedBlocks() failed: \" + e);\n}\n\nfunction findWebhook() {\n  if (WEBHOOK) return WEBHOOK;\n  var found = \"\";\n  var all = \"\";\n  for (var ch in blocks) {\n    all = all + ch + \" \";\n    if (!found && ch.indexOf(\"webhook\") === 0) found = ch;\n  }\n  if (!found) {\n    console.log(\"no webhook block among: \" + all +\n                \"- add a Webhook block and connect it to the script.\");\n    return \"webhook-a\";\n  }\n  return found;\n}\n\n/* Every connected block except the webhook is an output, whatever type it is.\n * Built by concatenation rather than array push: JS-Interpreter is unreliable\n * with locally scoped arrays, but split() on a string works. */\nfunction findOutputs() {\n  var csv = \"\";\n  for (var ch in blocks) {\n    if (ch === WEBHOOK) continue;\n    if (ch.indexOf(\"webhook\") === 0) continue;\n    csv = csv === \"\" ? ch : csv + \",\" + ch;\n  }\n  return csv;\n}\n\nWEBHOOK = findWebhook();\n\nvar OUT_CSV = findOutputs();\nvar OUTS = OUT_CSV === \"\" ? [] : OUT_CSV.split(\",\");\n\n/* --------------------------------------------------------------- internals */\n\nvar halted = false;\nvar announced = false;\n\n/* Read live rather than cached, so editing a Control takes effect immediately\n * without reloading the script. */\nfunction channelFor(i) {\n  var v = getVariable(CONTROL_PREFIX + (i + 1));\n  if (v === undefined || v === null) return \"\";\n  return String(v);\n}\n\n/* Toy types do not share one interface. A generic toy takes setVolume with a\n * percentVolume; a custom toy takes setValue with a key, as seen in a real\n * script export. Anything unrecognised is treated as a generic toy. */\nfunction setOutput(toy, percent) {\n  if (toy.indexOf(\"generic-custom-toy\") === 0) {\n    callAction({\n      type: \"updateComponent\",\n      channel: toy,\n      action: \"setValue\",\n      key: CUSTOM_TOY_KEY,\n      value: String(percent)\n    });\n    return;\n  }\n\n  callAction({\n    type: \"updateComponent\",\n    channel: toy,\n    action: \"setVolume\",\n    rampTime: RAMP_MS / 1000,\n    percentVolume: String(percent)\n  });\n}\n\nfunction stopAll() {\n  for (var i = 0; i < OUTS.length; i++) {\n    setOutput(OUTS[i], 0);\n  }\n}\n\n/* The trigger callback gets the whole message as trigger-<key>, so a channel\n * whose name was only typed into a Control at runtime can be read directly. */\nfunction readValue(data, name) {\n  if (!name) return null;\n  var raw = data[\"trigger-\" + name];\n  if (raw === undefined || raw === null || raw === \"\") return null;\n  var v = parseFloat(raw);\n  if (isNaN(v)) return null;\n  if (v < 0) v = 0;\n  if (v > 100) v = 100;\n  return Math.round(v);\n}\n\nfunction onAxes(data) {\n  if (halted) return;\n  for (var i = 0; i < OUTS.length; i++) {\n    var v = readValue(data, channelFor(i));\n    if (v !== null) setOutput(OUTS[i], v);\n  }\n}\n\nfunction onPause(data) {\n  halted = String(data[\"trigger-pause\"]) === \"1\";\n  if (halted) console.log(\"remote controls to add (name:type): \" + CONTROLS);\n\nstopAll();\n}\n\nfunction onHeartbeat(data) {\n  /* Liveness only. The deadman switch is the Watchdog Job - JavaScript here has\n   * no timer, and sleep() would block the interpreter. */\n}\n\n/* ------------------------------------------------------------------ remote */\n\nfunction clock(total) {\n  total = Math.max(0, Math.round(total));\n  var m = Math.floor(total / 60);\n  var sec = total % 60;\n  return m + \":\" + (sec < 10 ? \"0\" : \"\") + sec;\n}\n\nfunction onStatus(data) {\n  setVariable(\"videoTitle\", data[\"trigger-title\"] || \"\");\n  setVariable(\"videoPosition\", data[\"trigger-position\"] || \"0\");\n  setVariable(\"videoDuration\", data[\"trigger-duration\"] || \"0\");\n  setVariable(\"videoPlaying\", data[\"trigger-playing\"] || \"0\");\n\n  var pos = parseFloat(data[\"trigger-position\"]) || 0;\n  var dur = parseFloat(data[\"trigger-duration\"]) || 0;\n  setVariable(\"videoPercent\", dur > 0 ? Math.round((pos / dur) * 100) : 0);\n  setVariable(\"videoElapsed\", clock(pos) + \" / \" + clock(dur));\n\n  /* What this scene actually carries, so you can see which names are worth\n   * putting in the out1..outN Controls instead of guessing. Display it with a\n   * Control bound to videoChannels. */\n  var chans = data[\"trigger-channels\"] || \"\";\n  if (chans !== lastChannels) {\n    lastChannels = chans;\n    setVariable(\"videoChannels\", chans);\n    console.log(\"channels in this scene: \" + (chans === \"\" ? \"(none)\" : chans));\n  }\n}\n\nvar lastChannels = null;\n\n/* Needs \"Script can send outbound messages\" ticked on the webhook connection.\n *\n * UNVERIFIED: the Action shape for an outbound webhook message is not in the\n * docs. If the buttons do nothing, use 'Add XToys Action' in the JS editor with\n * the webhook block selected to get the real JSON and fix this one function. */\nfunction sendToStash(msg) {\n  msg.channel = WEBHOOK;\n  callAction(msg);\n}\n\nfunction play()     { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"play\" } }); }\nfunction pause()    { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"pause\" } }); }\nfunction toggle()   { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"toggle\" } }); }\nfunction skip(secs) { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"skip\", seconds: secs } }); }\nfunction seekPct(p) { sendToStash({ type: \"updateComponent\", action: \"send\", data: { action: \"seek\", percent: p } }); }\n\nfunction onBtnPlay()   { play(); }\nfunction onBtnPause()  { pause(); }\nfunction onBtnToggle() { toggle(); }\nfunction skipAmount() {\n  var v = parseFloat(getVariable(\"skipSeconds\"));\n  return isNaN(v) || v <= 0 ? 30 : v;\n}\n\nfunction onBtnBack()   { skip(-skipAmount()); }\nfunction onBtnFwd()    { skip(skipAmount()); }\nfunction onSeek()      { seekPct(parseFloat(getVariable(\"seekPercent\")) || 0); }\n\n/* ---------------------------------------------------------------- dispatch */\n\n/* One trigger for everything, dispatched here on trigger-action. The callback\n * gets no way to tell which registered trigger fired, so an action-filtered\n * trigger and a bare one that fires for everything look identical - there was\n * never evidence the filtering worked. The action arrives in the data anyway. */\nfunction onMessage(data) {\n  if (!announced) {\n    announced = true;\n    var body = \"\";\n    for (var k in data) { body = body + k + \"=\" + data[k] + \"  \"; }\n    console.log(\"first message: \" + body);\n  }\n\n  var action = String(data[\"trigger-action\"] || \"\");\n  if (action === ACTION) onAxes(data);\n  else if (action === \"pause\") onPause(data);\n  else if (action === \"status\") onStatus(data);\n  else if (action === \"heartbeat\") onHeartbeat(data);\n}\n\nregisterTrigger({ type: \"componentState\", channel: WEBHOOK }, onMessage);\n\nregisterTrigger({ type: \"variableChange\", variable: \"btnPlay\" },   onBtnPlay);\nregisterTrigger({ type: \"variableChange\", variable: \"btnPause\" },  onBtnPause);\nregisterTrigger({ type: \"variableChange\", variable: \"btnToggle\" }, onBtnToggle);\nregisterTrigger({ type: \"variableChange\", variable: \"btnBack\" },   onBtnBack);\nregisterTrigger({ type: \"variableChange\", variable: \"btnFwd\" },    onBtnFwd);\nregisterTrigger({ type: \"variableChange\", variable: \"seekPercent\" }, onSeek);\n\n/* Controls the remote expects, so a missing one is obvious rather than just\n * being a button that does nothing. */\nvar CONTROLS = \"btnPlay:push,btnPause:push,btnToggle:push,btnBack:push,\" +\n               \"btnFwd:push,seekPercent:slider,skipSeconds:input\";\n\n/* ------------------------------------------------------------------ report */\n\nconsole.log(\"listening on '\" + WEBHOOK + \"'\");\n\nif (OUTS.length === 0) {\n  console.log(\"no toys connected - connect one per output you want\");\n} else {\n  var summary = \"\";\n  for (var s = 0; s < OUTS.length; s++) {\n    var name = channelFor(s);\n    summary = summary + \"  \" + CONTROL_PREFIX + (s + 1) + \" (\" + OUTS[s] + \") -> \" +\n              (name === \"\" ? \"(unset)\" : name) + \"\\n\";\n  }\n  console.log(\"output mapping:\\n\" + summary);\n}\n\nstopAll();\n"
+}
