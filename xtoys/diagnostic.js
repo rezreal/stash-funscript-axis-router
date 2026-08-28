@@ -1,4 +1,4 @@
-/* Funscript Axis Router - diagnostic v5
+/* Funscript Axis Router - diagnostic v6
  *
  * Paste into the XToys JS editor, load a scene in stash, read the console.
  * Drives nothing; only reports.
@@ -60,11 +60,14 @@ function reg(spec) {
  * Export instead - they are in the channels: {} section.
  *
  * Set this to the channel the messages arrive on. */
-var CHANNELS = "webhook-a";
+var CHANNELS = "webhook-a,webhook-b,webhook-c,webhook-d," +
+               "privatewebhook-a,private-webhook-a,privateWebhook-a," +
+               "sharedwebhook-a,shared-webhook-a,webhook";
 
 /* ---------------------------------------------------------------- probing */
 
 var n = 0;
+var chList = CHANNELS.split(",");
 var keyList = KEYS.split(",");
 var actionList = ACTIONS.split(",");
 var i;
@@ -74,7 +77,6 @@ for (i = 0; i < keyList.length; i++) {
   n = n + reg({ type: "variableChange", variable: keyList[i] });
 }
 
-var chList = CHANNELS.split(",");
 for (var c2 = 0; c2 < chList.length; c2++) {
   var ch = chList[c2];
   n = n + reg({ type: "componentState", channel: ch });
@@ -91,5 +93,7 @@ for (var c2 = 0; c2 < chList.length; c2++) {
   }
 }
 
-console.log("diagnostic v5 ready: " + n + " triggers on " + CHANNELS +
-            ". Load a scene in stash now.");
+console.log("diagnostic v6 ready: " + n + " triggers across " + chList.length +
+            " candidate channel names. Load a scene in stash now.");
+console.log("Any FIRED line names the channel that works - put it in WEBHOOK.");
+console.log("If none fire, paste the channels: {} section of your Script Export.");
