@@ -16,19 +16,32 @@ const ALL_TOYS =
   "generic-1-a,generic-1-b,generic-1-c,generic-1-d," +
   "generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-export function buildHash(src) {
+/* Covers the manifest as well as the JavaScript. Controls, Jobs and channels are
+ * as much a part of the build as the code is - a manifest-only change that left
+ * the hash alone would print a stamp indistinguishable from the previous build,
+ * which defeats the point of having one. */
+export function buildHash(src, manifest) {
   // hash with the stamp blanked, so stamping is idempotent
   const normalised = src.replace(/var BUILD = "[^"]*";/, 'var BUILD = "";');
-  return crypto.createHash("sha256").update(normalised).digest("hex").slice(0, 8);
+
+  const shell = { ...manifest };
+  delete shell.customFunctions; // it is `src`, already hashed above
+
+  return crypto
+    .createHash("sha256")
+    .update(normalised)
+    .update(JSON.stringify(shell))
+    .digest("hex")
+    .slice(0, 8);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   let src = fs.readFileSync(JS, "utf8");
-  const hash = buildHash(src);
+  const manifest = JSON.parse(fs.readFileSync(JSON_FILE, "utf8"));
+  const hash = buildHash(src, manifest);
   src = src.replace(/var BUILD = "[^"]*";/, `var BUILD = "${hash}";`);
   fs.writeFileSync(JS, src);
 
-  const manifest = JSON.parse(fs.readFileSync(JSON_FILE, "utf8"));
   manifest.customFunctions = src.replace(
     /var TOYS = "[^"]*";/,
     `var TOYS = "${ALL_TOYS}";`

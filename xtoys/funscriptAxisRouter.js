@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "aceffcef";             /* content hash, stamped by stamp.mjs */
+var BUILD = "5d343235";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */

@@ -68,7 +68,7 @@ if (!embedded || embedded.length < 1000) {
 // the console stamp has to be trustworthy, so verify it matches the content
 const jsSrc = fs.readFileSync("xtoys/funscriptAxisRouter.js", "utf8");
 const stamped = /var BUILD = "([^"]*)";/.exec(jsSrc);
-const expected = buildHash(jsSrc);
+const expected = buildHash(jsSrc, JSON.parse(fs.readFileSync("xtoys/xtoys-script.json", "utf8")));
 if (!stamped) fail("xtoys/funscriptAxisRouter.js", "no BUILD stamp");
 else if (stamped[1] !== expected) {
   fail("xtoys/funscriptAxisRouter.js",
