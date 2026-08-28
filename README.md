@@ -38,10 +38,10 @@ Configure under **Settings > Plugins > Funscript Axis Router**.
 
 ### A ready-made script
 
-[`xtoys/funscriptAxisRouter.xtoys.json`](xtoys/) is a starting-point XToys script
-with **8 generic outputs**, each following a funscript channel you name in its
-config. See [xtoys/README.md](xtoys/README.md). It is untested — unlike the rest
-of this repo, it cannot be exercised from outside XToys.
+[`xtoys/xtoys-script.json`](xtoys/) is a ready-made XToys script with **8
+outputs**, each following a funscript channel you name in its config, plus
+display fields and remote buttons. See [xtoys/README.md](xtoys/README.md). Load
+that one file — the JavaScript is inlined in it.
 
 ### Messages
 

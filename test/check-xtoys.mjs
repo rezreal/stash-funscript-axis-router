@@ -50,10 +50,10 @@ for (const file of FILES) {
 }
 
 // the manifest must carry the same JS it claims to
-const manifest = JSON.parse(fs.readFileSync("xtoys/example-script.xtoys.json", "utf8"));
+const manifest = JSON.parse(fs.readFileSync("xtoys/xtoys-script.json", "utf8"));
 const embedded = manifest.customFunctions;
 const standalone = fs.readFileSync("xtoys/funscriptAxisRouter.js", "utf8");
-console.log("xtoys/example-script.xtoys.json");
+console.log("xtoys/xtoys-script.json");
 if (!embedded || embedded.length < 1000) {
   fail("manifest", "customFunctions is missing or truncated");
 } else if (manifest.globalTriggers.length > 0) {
