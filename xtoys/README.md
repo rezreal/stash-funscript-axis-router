@@ -198,14 +198,16 @@ fires only when messages genuinely stop.
 
 **On script stop** — setVolume `0` on every output.
 
-## Why `payload` rather than the flat keys
+## The `payload` copy
 
-For the block-and-trigger route only. An XToys trigger binds incoming keys
-statically as `trigger-<key>`, which cannot express "read whatever channel the
-user typed into a config box", so the plugin repeats the whole channel map as one
-JSON string under `payload` for a Custom Code action to parse and index by name.
-The JS route does not need this — `registerTrigger` passes the whole map. Flat
-keys remain for custom toys and simpler scripts.
+**Off by default**, and you almost certainly want it that way — it repeats the
+whole channel map as an escaped JSON string, doubling every frame at 10 Hz.
+
+It exists only for the block-and-trigger route, where bindings are static
+`trigger-<key>` and so cannot express "read whatever channel the user typed into
+a config box"; a Custom Code action parses the copy and indexes it by name. The
+JS route has no use for it — `registerTrigger` passes the whole map to the
+callback already. Turn it on with *Include Payload Copy* if you need it.
 
 ## Adapting it
 

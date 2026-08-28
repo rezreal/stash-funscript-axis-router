@@ -44,6 +44,12 @@
   // of these names would collide, so it is skipped.
   var RESERVED = { action: true, payload: true };
 
+  function reserved(key, cfg) {
+    var k = String(key).toLowerCase();
+    if (k === "payload") return !!cfg.includePayload;
+    return RESERVED[k] === true;
+  }
+
   function canonicalAxis(key) {
     return AXIS_ALIASES[String(key).toLowerCase()] || null;
   }
@@ -199,6 +205,7 @@
   var ACK_TIMEOUT_MS = 5000;
 
   function XToysSink(cfg) {
+    this.includePayload = cfg.includePayload;
     this.logged = {};
     this.onCommand = null;
     this.action = cfg.xtoysAction;
@@ -330,13 +337,16 @@
       payload[k] = String(values[k]);
     });
 
-    // A script's webhook trigger matches on "action" and binds the other keys as
-    // trigger-<key> variables. Those bindings are static, so a script cannot read
-    // a channel whose name the user only types into a config box - "payload"
-    // repeats the same map as one JSON string, which a script can parse and index
-    // by any name at runtime. A custom toy ignores both and reads the flat keys.
+    // XToys requires an action key on every webhook message; it selects which
+    // trigger fires.
+    //
+    // "payload" repeats the same channel map as one JSON string, and is off by
+    // default because it doubles every frame. It only helps the block-and-
+    // trigger route, where bindings are static and so cannot read a channel
+    // named at runtime. A script using registerTrigger gets the whole map in its
+    // callback and has no use for it.
     if (this.action) {
-      payload.payload = JSON.stringify(payload);
+      if (this.includePayload) payload.payload = JSON.stringify(payload);
       payload.action = action || this.action;
     }
 
@@ -401,7 +411,7 @@
       // Handy in play nothing else would, so route it like any other axis.
       if (ax.stroke && !cfg.routeStroke) return;
       if (!matchesFilter(cfg.only, ax.key, ax.id)) return;
-      if (RESERVED[ax.key.toLowerCase()]) {
+      if (reserved(ax.key, cfg)) {
         console.warn(
           LOG,
           'skipping channel "' + ax.key + '": that name is reserved by the message envelope'
@@ -817,6 +827,7 @@
       routeStrokeAxis: routeStrokeAxis,
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
       xtoysToken: String(raw.xtoysToken || "").trim(),
+      includePayload: raw.includePayload === true || raw.includePayload === "true",
       xtoysAction: String(
         raw.xtoysAction === undefined || raw.xtoysAction === null ? "axes" : raw.xtoysAction
       ).trim(),

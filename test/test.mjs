@@ -502,11 +502,9 @@ console.log("\nscript envelope");
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("default action name", m.action, "axes");
+  ok("no payload copy by default", m.payload === undefined, Object.keys(m));
   eq("flat channel keys still present", [m.roll, m.pitch, m.stroke], ["50","35","50"]);
-  const inner = JSON.parse(m.payload);
-  eq("payload repeats the channel map", Object.keys(inner).sort().map(k => k+"="+inner[k]),
-     ["pitch=35","roll=50","stroke=50"]);
-  ok("payload excludes the envelope itself", !("action" in inner) && !("payload" in inner));
+  eq("frame is channels plus action only", Object.keys(m).sort(), ["action","pitch","roll","stroke"]);
 }
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysAction: "custom", pauseKey: "", heartbeatKey: "" });
@@ -522,7 +520,7 @@ console.log("\nscript envelope");
   await new Promise(r => setTimeout(r, 5));
   const resume = e.sent.filter(m => m.action === "pause")[0];
   eq("resume uses the pause action", resume.action, "pause");
-  eq("resume payload", JSON.parse(resume.payload), { pause: "0" });
+  eq("resume carries the pause key", resume.pause, "0");
   e.beat();
   eq("heartbeat uses its own action", e.sent[e.sent.length - 1].action, "heartbeat");
   await e.client.pause();
@@ -534,12 +532,13 @@ console.log("\nscript envelope");
     action:  { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
     payload: { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
     roll:    { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] } } };
-  const e = makeEnv(clash, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  const e = makeEnv(clash, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", includePayload: true });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("colliding channels skipped", JSON.parse(m.payload), { roll: "50" });
+  ok("only the collisions were dropped", m.roll === "50");
   eq("action survives intact", m.action, "axes");
 }
 {
@@ -664,6 +663,38 @@ console.log("\nstash initialisation handshake");
   const e = makeEnv(V2, { xtoysWebhookId: "" });
   await new Promise(r => setTimeout(r, 5));
   eq("no webhook id means no socket", e.conns.length, 0);
+}
+
+
+// ---- 27. payload copy is opt-in -----------------------------------------
+console.log("\npayload copy");
+{
+  const off = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  await off.client.uploadScript("u"); await off.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  off.player.t = 0.5; off.tick();
+  const a = off.sent.filter(m => m.action === "axes").pop();
+  ok("absent by default", a.payload === undefined, Object.keys(a));
+
+  const on = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", includePayload: true });
+  await on.client.uploadScript("u"); await on.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  on.player.t = 0.5; on.tick();
+  const b = on.sent.filter(m => m.action === "axes").pop();
+  const inner = JSON.parse(b.payload);
+  eq("present when asked for", Object.keys(inner).sort(), ["pitch","roll","stroke"]);
+  ok("not nested inside itself", !("payload" in inner) && !("action" in inner));
+
+  // a channel really called "payload" is fine while the copy is off
+  const clash = { version: "2.0", channels: {
+    payload: { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
+    roll:    { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] } } };
+  const c = makeEnv(clash, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "" });
+  await c.client.uploadScript("u"); await c.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  c.player.t = 0.5; c.tick();
+  const d = c.sent.filter(m => m.action === "axes").pop();
+  eq("a channel named payload survives when the copy is off", d.payload, "50");
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");

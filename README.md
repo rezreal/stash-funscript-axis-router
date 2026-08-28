@@ -48,25 +48,25 @@ of this repo, it cannot be exercised from outside XToys.
 One newline-terminated JSON object per update:
 
 ```
-{"roll":"62","pitch":"41","payload":"{\"roll\":\"62\",\"pitch\":\"41\"}","action":"axes"}\n
+{"roll":"62","pitch":"41","action":"axes"}\n
 ```
 
-Channels appear as flat keys, values `0`–`100` as strings. Two envelope fields
-travel with them:
+Channels appear as flat keys, values `0`–`100` as strings, plus one envelope
+field: **`action`**, which selects the trigger inside an XToys script. Axis
+updates use the configured name (`axes` by default); pause and heartbeat use
+`pause` and `heartbeat`, so a script can react to each separately.
 
-- **`action`** — which trigger fires inside an XToys script. Axis updates use the
-  configured name (`axes` by default); pause and heartbeat messages use `pause`
-  and `heartbeat`, so a script can react to each separately.
-- **`payload`** — the same channel map repeated as one JSON string. An XToys
-  trigger binds incoming keys statically as `trigger-<key>`, which cannot express
-  "read whatever channel the user typed into a config box", so a script parses
-  this instead and indexes it by name at runtime.
+*Include Payload Copy* adds a `payload` field repeating the same map as one JSON
+string. It is **off by default** — it doubles every frame, and only helps the
+block-and-trigger route, where bindings are static and cannot read a channel
+named at runtime. A script using `registerTrigger` receives the whole map in its
+callback and has no use for it.
 
 The XToys [webhook docs](https://guide.xtoys.app/tools/webhook.html) are explicit
 that *"webhook messages must have an action key"*, so leave *XToys Action Name*
 set for anything webhook-based. Blank drops the envelope and sends bare
-`{"roll":"62"}`, which is only right for a **custom toy**. Channels named `action`
-or `payload` are skipped with a console warning while the envelope is on.
+`{"roll":"62"}`, which is only right for a **custom toy**. A channel named `action` is skipped with a console warning while the envelope is
+on, and `payload` likewise only when the payload copy is enabled.
 
 **Channel names are taken verbatim from the funscript.** A v2.0 file with
 `channels: { roll: …, "e-stim": … }` sends `roll` and `e-stim`; a v1.1 file with
@@ -108,6 +108,7 @@ usually a wrong token.
 | XToys Webhook ID | — | Blank disables routing entirely. |
 | XToys Token | — | Only for a custom toy; sent as `?token=`. See *About the token* above. |
 | XToys Action Name | `axes` | Which script trigger fires. Blank sends bare channel/value pairs. |
+| Include Payload Copy | off | Repeat the channels as a JSON string. Doubles frame size; only for the block route. |
 | Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
 | Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
 | Heartbeat Interval (ms) | `1000` | Make your script's timeout 2–3× this. |

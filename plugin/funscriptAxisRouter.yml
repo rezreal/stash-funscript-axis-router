@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.7.2
+version: 0.8.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -45,6 +45,14 @@ settings:
       XToys requires an action key on every webhook message, so only leave this
       blank for a custom toy, which expects bare channel/value pairs.
     type: STRING
+  includePayload:
+    displayName: Include Payload Copy
+    description: >-
+      Repeat the channel map as one JSON string in a "payload" field. Off by
+      default - it doubles the size of every message. Only turn it on if you
+      built the XToys side out of blocks and triggers rather than JavaScript,
+      where a trigger cannot read a channel whose name it only learns at runtime.
+    type: BOOLEAN
   stopValue:
     displayName: Stop Value
     description: >-
