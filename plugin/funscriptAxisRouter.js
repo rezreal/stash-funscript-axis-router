@@ -38,10 +38,6 @@
 
   var STROKE_AXIS = "L0";
 
-  // Fields the message format owns. A channel with one of these names would
-  // corrupt the payload, so it is skipped rather than silently clobbered.
-  var RESERVED = { action: true, at: true, playing: true };
-
   // Who drives the stroke axis.
   //   auto   - the Handy when one is configured, this plugin otherwise
   //   router - always this plugin, on the same clock as every other axis; the
@@ -189,14 +185,35 @@
 
   /* ------------------------------------------------------------------- sink */
 
-  // XToys' webhook endpoint takes a flat JSON object: an `action` naming the
-  // trigger block in your script, plus whatever named parameters that block
-  // reads. Auth is the webhook id in the URL. (The Bearer token you may have
-  // seen documented belongs to the opposite direction - XToys driving a custom
-  // toy - and a browser cannot set that header anyway.)
+  // XToys accepts a newline-terminated JSON object per message, keyed by
+  // whatever your script reads. We send one key per routed axis, value 0-100 as
+  // a string:  {"roll":"62","pitch":"41"}\n
+  //
+  // Auth is awkward. XToys documents a custom toy as
+  //   Authorization: Bearer <token>
+  // but a browser cannot set headers on a WebSocket, so we cannot send that.
+  // The two channels a browser does have are the subprotocol list and the query
+  // string, and a webhook block in a script appears to need no token at all. We
+  // try them in order and pin whichever one opens - see README.
+  function authAttempts(baseUrl, token) {
+    if (!token) return [{ name: "none", url: baseUrl, protocols: undefined }];
+    return [
+      { name: "subprotocol", url: baseUrl, protocols: ["Bearer", token] },
+      {
+        name: "query",
+        url: baseUrl + (baseUrl.indexOf("?") === -1 ? "?" : "&") +
+             "token=" + encodeURIComponent(token),
+        protocols: undefined,
+      },
+      { name: "none", url: baseUrl, protocols: undefined },
+    ];
+  }
+
   function XToysSink(cfg) {
-    this.url = "wss://webhook.xtoys.app/" + cfg.xtoysWebhookId;
-    this.action = cfg.xtoysAction;
+    this.baseUrl = "wss://webhook.xtoys.app/" + cfg.xtoysWebhookId;
+    this.attempts = authAttempts(this.baseUrl, cfg.xtoysToken);
+    this.attempt = 0;
+    this.pinned = false;
     this.ws = null;
     this.retries = 0;
     this.retryTimer = null;
@@ -212,27 +229,48 @@
     if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
 
     var self = this;
+    var a = this.attempts[this.attempt];
+    var opened = false;
     var ws;
+
     try {
-      ws = new WebSocket(this.url);
+      ws = a.protocols ? new WebSocket(a.url, a.protocols) : new WebSocket(a.url);
     } catch (e) {
-      console.error(LOG, "XToys connect failed", e);
+      console.error(LOG, "XToys connect failed (" + a.name + ")", e);
+      this.nextAttempt();
       this.scheduleRetry();
       return;
     }
 
     this.ws = ws;
     ws.onopen = function () {
+      opened = true;
       self.retries = 0;
-      console.log(LOG, "XToys connected");
+      if (!self.pinned) {
+        self.pinned = true;
+        console.log(LOG, "XToys connected (auth: " + a.name + ")");
+      }
     };
     ws.onerror = function () {
-      // onclose always follows, retry is handled there
+      // onclose always follows; the retry decision is made there
     };
     ws.onclose = function () {
       self.ws = null;
+      // Closing without ever opening means this auth channel was rejected, so
+      // move on to the next one. A drop after a good connection is just a drop.
+      if (!opened && !self.pinned) self.nextAttempt();
       if (!self.closed) self.scheduleRetry();
     };
+  };
+
+  XToysSink.prototype.nextAttempt = function () {
+    if (this.attempt < this.attempts.length - 1) {
+      this.attempt++;
+      console.warn(
+        LOG,
+        "XToys rejected the connection, trying auth: " + this.attempts[this.attempt].name
+      );
+    }
   };
 
   XToysSink.prototype.scheduleRetry = function () {
@@ -245,20 +283,17 @@
     }, delay);
   };
 
-  XToysSink.prototype.send = function (values, ms, playing) {
+  XToysSink.prototype.send = function (values) {
     if (!this.ws || this.ws.readyState !== 1) return;
 
     var payload = {};
     Object.keys(values).forEach(function (k) {
-      payload[k] = values[k];
+      payload[k] = String(values[k]);
     });
-    // set last so a stray channel name can never break the message format
-    payload.action = this.action;
-    payload.at = Math.round(ms);
-    payload.playing = playing;
 
     try {
-      this.ws.send(JSON.stringify(payload));
+      // the trailing newline is part of the protocol, not cosmetic
+      this.ws.send(JSON.stringify(payload) + "\n");
     } catch (e) {
       console.error(LOG, "XToys send failed", e);
     }
@@ -274,7 +309,6 @@
     this.axes = [];
     this.timer = null;
     this.last = null;
-    this.lastMs = 0;
     this.lastSentAt = 0;
   }
 
@@ -299,13 +333,6 @@
       // Handy in play nothing else would, so route it like any other axis.
       if (ax.stroke && !cfg.routeStroke) return;
       if (!matchesFilter(cfg.only, ax.key, ax.id)) return;
-      if (RESERVED[ax.key.toLowerCase()]) {
-        console.warn(
-          LOG,
-          'skipping channel "' + ax.key + '": that name is reserved by the message format'
-        );
-        return;
-      }
       picked.push(ax);
     });
 
@@ -337,10 +364,22 @@
     clearInterval(this.timer);
     this.timer = null;
 
-    // Tell the script we stopped, and hand it the values we left off at. Zero
-    // is not a safe neutral for every axis (50 is centre for roll and pitch, 0
-    // is off for a vibe), so the XToys side decides what to do about it.
-    if (this.last) this.sink.send(this.last, this.lastMs, false);
+    // On stop, either hold the last values or drive every channel to a set
+    // value. Holding is the safe default: zero is not a neutral for every axis
+    // (50 is centre for roll and pitch, 0 is off for a vibe), so which one you
+    // want depends on your hardware. Set Stop Value to 0 to park vibrations.
+    if (this.last) {
+      var stop = this.cfg.stopValue;
+      if (stop === null) {
+        this.sink.send(this.last);
+      } else {
+        var parked = {};
+        Object.keys(this.last).forEach(function (k) {
+          parked[k] = stop;
+        });
+        this.sink.send(parked);
+      }
+    }
     this.last = null;
   };
 
@@ -375,12 +414,11 @@
     var ms = player.currentTime() * 1000 + this.cfg.offsetMs;
     var values = this.sample(ms);
 
-    this.lastMs = ms;
     if (!this.changed(values)) return;
 
     this.last = values;
     this.lastSentAt = Date.now();
-    this.sink.send(values, ms, true);
+    this.sink.send(values);
   };
 
   /* ----------------------------------------------------------------- client */
@@ -516,6 +554,10 @@
       };
     }
 
+    // blank means "hold the last values"; a number parks every channel there
+    var stopRaw = String(raw.stopValue === undefined ? "" : raw.stopValue).trim();
+    var stopValue = stopRaw === "" ? null : clamp(num(stopRaw, 0), 0, 100);
+
     var strokeAxis = String(raw.strokeAxis || "").trim().toLowerCase() || "auto";
     if (!STROKE_MODES[strokeAxis]) {
       console.warn(LOG, 'unknown strokeAxis "' + strokeAxis + '", falling back to "auto"');
@@ -525,7 +567,8 @@
     return {
       strokeAxis: strokeAxis,
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
-      xtoysAction: String(raw.xtoysAction || "").trim() || "funscript",
+      xtoysToken: String(raw.xtoysToken || "").trim(),
+      stopValue: stopValue,
       only: only,
       routeStroke: false, // set by the provider once we know about the Handy
       updateHz: clamp(num(raw.updateHz, 10), 1, 50),

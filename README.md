@@ -29,40 +29,53 @@ Configure under **Settings > Plugins > Funscript Axis Router**.
 
 ## XToys setup
 
-1. In your XToys script, add a **Webhook** trigger block and copy its webhook ID.
-2. Paste that ID into the plugin's *XToys Webhook ID* setting.
-3. Have the block react to the parameters below.
+1. In XToys, create the thing that will receive the messages — either a
+   **Webhook** trigger block inside a script, or a **custom toy**
+   (`xtoys.app/me/custom-toys`).
+2. Copy its webhook ID into the *XToys Webhook ID* setting. If it also gives you
+   a token, put that in *XToys Token*.
+3. Have your script read the channel names your funscript uses.
 
-The plugin connects to `wss://webhook.xtoys.app/<id>`. The ID is the only
-credential — there is no separate secret. (The `Authorization: Bearer` token you
-may have seen in XToys integrations belongs to the *opposite* direction, where
-XToys drives a custom toy of yours. A browser cannot set that header, and we
-don't need it.)
+### Messages
 
-## Messages
+One newline-terminated JSON object per update, keyed by channel, values `0`–`100`
+as strings:
 
-One flat JSON object per update:
-
-```json
-{ "roll": 62, "pitch": 41, "action": "funscript", "at": 12480, "playing": true }
+```
+{"roll":"62","pitch":"41"}\n
 ```
 
-- `action` — matches your webhook block, configurable, defaults to `funscript`.
-- `at` — script position in ms, offset applied.
-- `playing` — `false` on the final message when playback stops.
-- one key per routed axis, `0`–`100`.
-
-**Axis keys are taken verbatim from the funscript.** A v2.0 file with
+**Channel names are taken verbatim from the funscript.** A v2.0 file with
 `channels: { roll: …, "e-stim": … }` sends `roll` and `e-stim`; a v1.1 file with
 `axes: [{ id: "R1" }]` sends `R1`. Nothing is renamed, so arbitrary channel names
 work — the name in the file is the contract with your XToys script.
 
-`playing: false` deliberately carries the *last* values rather than zeros,
-because zero is not a neutral for every axis (50 is centre for roll and pitch, 0
-is off for a vibe). Your XToys script decides what to do on stop.
+Nothing else is in the payload: no action, timestamp or status fields, so a
+channel can be called anything without colliding with the protocol.
 
-Channels named `action`, `at` or `playing` are skipped with a console warning —
-they would collide with the message format.
+### About the token
+
+XToys documents custom-toy auth as an HTTP header:
+
+```
+Authorization: Bearer <token>
+```
+
+**A browser cannot set headers on a WebSocket.** That is a limitation of the
+browser API, not something this plugin can work around, and it is the one part
+of this integration that may not work from a UI-only plugin.
+
+So when a token is set we offer it over the two channels a browser *does* have,
+in order, and keep whichever the server accepts:
+
+1. as a subprotocol — `Sec-WebSocket-Protocol: Bearer, <token>`
+2. as a query parameter — `?token=<token>`
+3. no token at all
+
+The browser console logs which one connected (`XToys connected (auth: …)`) and
+warns each time one is rejected. A **webhook block inside a script** appears to
+need no token at all, so if the token route fails, that is the fallback that is
+known to work from a browser.
 
 ## Settings
 
@@ -70,7 +83,8 @@ they would collide with the message format.
 |---|---|---|
 | Stroke Axis Owner | `auto` | `auto`, `router` or `handy` — see below. |
 | XToys Webhook ID | — | Blank disables routing entirely. |
-| XToys Action Name | `funscript` | The `action` field value. |
+| XToys Token | — | Only for a custom toy. See *About the token* above. |
+| Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
 | Axes To Route | all | e.g. `roll, pitch`. Matches the channel name as written, or its T-Code id — `roll` and `R1` both select the same axis. |
 | Update Rate (Hz) | `10` | Keep at or below XToys' Max Message Frequency. |
 | Deadband | `2` | Skip sending while nothing moved this far (0–100). |
@@ -121,6 +135,9 @@ be embedded in the one file.
   every axis on one clock — see above.
 - **Latency.** XToys webhooks are a cloud round-trip. Good enough for auxiliary
   motion, not good enough to have been worth using for the stroke axis.
+- **On stop**, values are held rather than zeroed by default, because zero is not
+  a neutral for every axis — 50 is centre for roll and pitch, 0 is off for a
+  vibe. Set *Stop Value* to `0` if any channel drives a vibrator.
 - Scenes need a `.funscript` next to the video (stash's `interactive` flag), or
   the player never engages the interactive client at all.
 

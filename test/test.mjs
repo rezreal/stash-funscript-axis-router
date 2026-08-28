@@ -16,9 +16,14 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
   const player = { t: 0, isPaused: false, currentTime() { return this.t; }, paused() { return this.isPaused; } };
   let tickFn = null;
 
+  const raw = [], conns = [];
   class FakeWS {
-    constructor(url) { this.url = url; this.readyState = 1; FakeWS.last = this; setTimeout(() => this.onopen && this.onopen(), 0); }
-    send(s) { sent.push(JSON.parse(s)); }
+    constructor(url, protocols) {
+      this.url = url; this.protocols = protocols; this.readyState = 1;
+      FakeWS.last = this; conns.push({ url, protocols });
+      setTimeout(() => { if (FakeWS.rejectAll) { this.readyState = 3; this.onclose && this.onclose(); } else { this.onopen && this.onopen(); } }, 0);
+    }
+    send(s) { raw.push(s); sent.push(JSON.parse(s)); }
     close() { this.readyState = 3; this.onclose && this.onclose(); }
   }
 
@@ -44,7 +49,7 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     stashConfig: { interface: iface, plugins: { funscriptAxisRouter: pluginSettings || {} } },
   };
   const client = InteractiveUtils.interactiveClientProvider(opts);
-  return { client, sent, player, handyBuilt, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
+  return { client, sent, raw, conns, FakeWS, player, handyBuilt, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
 }
 
 const V2 = {
@@ -75,11 +80,9 @@ console.log("\nv2.0 channels");
   ok("interval started", e.hasTick());
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("channel names verbatim (+stroke, no Handy here)", Object.keys(m).sort(), ["action","at","pitch","playing","roll","stroke"]);
-  eq("roll interpolated at 500ms", m.roll, 50);
-  eq("pitch interpolated at 500ms", m.pitch, 35);
-  eq("action name defaults", m.action, "funscript");
-  eq("playing flag", m.playing, true);
+  eq("channel names verbatim (+stroke, no Handy here)", Object.keys(m).sort(), ["pitch","roll","stroke"]);
+  eq("roll interpolated at 500ms", m.roll, "50");
+  eq("pitch interpolated at 500ms", m.pitch, "35");
 }
 
 // ---- 2. v1.1 axes --------------------------------------------------------
@@ -90,8 +93,8 @@ console.log("\nv1.1 axes array");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.25; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("v1.1 ids sent verbatim", Object.keys(m).sort(), ["L1","R1","action","at","playing","stroke"]);
-  eq("R1 at 250ms", m.R1, 25);
+  eq("v1.1 ids sent verbatim", Object.keys(m).sort(), ["L1","R1","stroke"]);
+  eq("R1 at 250ms", m.R1, "25");
 }
 
 // ---- 3. v1.0 has no aux --------------------------------------------------
@@ -111,7 +114,7 @@ console.log("\nv1.0 single axis");
   await new Promise(r => setTimeout(r, 5));
   ok("without a Handy, stroke IS routed", e2.hasTick());
   e2.player.t = 0.5; e2.tick();
-  eq("stroke value sent", e2.sent[e2.sent.length-1].stroke, 50);
+  eq("stroke value sent", e2.sent[e2.sent.length-1].stroke, "50");
 }
 
 // ---- 4. seeking ----------------------------------------------------------
@@ -121,11 +124,11 @@ console.log("\nseek");
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.5; e.tick();
-  eq("forward jump", e.sent[e.sent.length-1].roll, 50);
+  eq("forward jump", e.sent[e.sent.length-1].roll, "50");
   e.player.t = 0.25; e.tick();
-  eq("backward seek", e.sent[e.sent.length-1].roll, 25);
+  eq("backward seek", e.sent[e.sent.length-1].roll, "25");
   e.player.t = 1.75; e.tick();
-  eq("forward again", e.sent[e.sent.length-1].roll, 25);
+  eq("forward again", e.sent[e.sent.length-1].roll, "25");
 }
 
 // ---- 5. deadband ---------------------------------------------------------
@@ -150,9 +153,8 @@ console.log("\npause");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   await e.client.pause();
-  const m = e.sent[e.sent.length - 1];
-  eq("stop message playing=false", m.playing, false);
   ok("ticker cleared", !e.hasTick());
+  ok("a final frame was sent on stop", e.sent.length > 0);
   e.player.isPaused = true;
 }
 
@@ -212,8 +214,8 @@ console.log("\ninverted + range normalisation");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.0; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("inverted flips 100 -> 0", m.roll, 0);
-  eq("range 50 scales 50 -> 100", m.pitch, 100);
+  eq("inverted flips 100 -> 0", m.roll, "0");
+  eq("range 50 scales 50 -> 100", m.pitch, "100");
 }
 
 // ---- 10. offset + axis filter -------------------------------------------
@@ -224,15 +226,15 @@ console.log("\noffset + axis filter");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.0; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("filtered to roll only", Object.keys(m).sort(), ["action","at","playing","roll"]);
-  eq("offset applied (t=0 +500ms)", m.roll, 50);
+  eq("filtered to roll only", Object.keys(m).sort(), ["roll"]);
+  eq("offset applied (t=0 +500ms)", m.roll, "50");
 }
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 }, { funscriptOffset: 1000 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.0; e.tick();
-  eq("falls back to interface.funscriptOffset", e.sent[e.sent.length-1].roll, 100);
+  eq("falls back to interface.funscriptOffset", e.sent[e.sent.length-1].roll, "100");
 }
 
 
@@ -248,27 +250,10 @@ console.log("\narbitrary channel names");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("unknown names pass through verbatim", Object.keys(m).sort(), ["R1","action","at","e-stim","playing","stroke","vibe"]);
-  eq("vibe value", m.vibe, 50);
-  eq("e-stim value", m["e-stim"], 50);
-  eq("R1 kept as R1, not renamed to roll", m.R1, 20);
-}
-
-// ---- 12. reserved names --------------------------------------------------
-console.log("\nreserved channel names");
-{
-  const bad = { version: "2.0", channels: {
-    action:  { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
-    playing: { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] },
-    roll:    { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] } } };
-  const e = makeEnv(bad, { xtoysWebhookId: "abc", deadband: 0 });
-  await e.client.uploadScript("u"); await e.client.play(0);
-  await new Promise(r => setTimeout(r, 5));
-  e.player.t = 0.5; e.tick();
-  const m = e.sent[e.sent.length - 1];
-  eq("reserved channels skipped", Object.keys(m).sort(), ["action","at","playing","roll"]);
-  eq("action still the action name", m.action, "funscript");
-  eq("playing still a boolean", m.playing, true);
+  eq("unknown names pass through verbatim", Object.keys(m).sort(), ["R1","e-stim","stroke","vibe"]);
+  eq("vibe value", m.vibe, "50");
+  eq("e-stim value", m["e-stim"], "50");
+  eq("R1 kept as R1, not renamed to roll", m.R1, "20");
 }
 
 // ---- 13. filter accepts either spelling ----------------------------------
@@ -278,13 +263,13 @@ console.log("\nfilter by name or id");
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
-  eq("'roll' selects the R1 channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["R1","action","at","playing"]);
+  eq("'roll' selects the R1 channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["R1"]);
 
   const e2 = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, axes: "R2" });
   await e2.client.uploadScript("u"); await e2.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e2.player.t = 0.5; e2.tick();
-  eq("'R2' selects the pitch channel", Object.keys(e2.sent[e2.sent.length-1]).sort(), ["action","at","pitch","playing"]);
+  eq("'R2' selects the pitch channel", Object.keys(e2.sent[e2.sent.length-1]).sort(), ["pitch"]);
 }
 
 // ---- 14. dedupe across containers ---------------------------------------
@@ -298,7 +283,7 @@ console.log("\ndedupe axes vs channels");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("R1 and roll collapse to one axis", Object.keys(m).sort(), ["R1","action","at","playing"]);
+  eq("R1 and roll collapse to one axis", Object.keys(m).sort(), ["R1"]);
 }
 
 
@@ -314,7 +299,7 @@ console.log("\nstroke withheld when a Handy owns it");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("stroke excluded, aux still routed", Object.keys(m).sort(), ["action","at","pitch","playing","roll"]);
+  eq("stroke excluded, aux still routed", Object.keys(m).sort(), ["pitch","roll"]);
 }
 
 
@@ -333,7 +318,7 @@ console.log("\nstroke axis owner");
   r.player.t = 0.5; r.tick();
   eq("router: Handy never constructed", r.handyBuilt.n, 0);
   eq("router: stroke routed alongside aux", Object.keys(r.sent[r.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll","stroke"]);
+     ["pitch","roll","stroke"]);
   eq("router: sentinel key so the pipeline runs", r.client.handyKey, "funscriptAxisRouter");
 
   // handy: always delegated, stroke withheld
@@ -343,7 +328,7 @@ console.log("\nstroke axis owner");
   h.player.t = 0.5; h.tick();
   eq("handy: Handy constructed", h.handyBuilt.n, 1);
   eq("handy: stroke withheld", Object.keys(h.sent[h.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll"]);
+     ["pitch","roll"]);
 
   // handy with no key: nobody plays stroke
   const hn = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "handy" });
@@ -351,7 +336,7 @@ console.log("\nstroke axis owner");
   await new Promise(x => setTimeout(x, 5));
   hn.player.t = 0.5; hn.tick();
   eq("handy+no key: stroke still withheld", Object.keys(hn.sent[hn.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll"]);
+     ["pitch","roll"]);
 
   // auto still behaves exactly as before
   const a1 = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "auto" }, {}, mkHandy());
@@ -359,14 +344,14 @@ console.log("\nstroke axis owner");
   await new Promise(x => setTimeout(x, 5));
   a1.player.t = 0.5; a1.tick();
   eq("auto+handy: stroke withheld", Object.keys(a1.sent[a1.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll"]);
+     ["pitch","roll"]);
 
   const a2 = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0 });
   await a2.client.uploadScript("u"); await a2.client.play(0);
   await new Promise(x => setTimeout(x, 5));
   a2.player.t = 0.5; a2.tick();
   eq("auto+no handy (default): stroke routed", Object.keys(a2.sent[a2.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll","stroke"]);
+     ["pitch","roll","stroke"]);
 
   // garbage falls back to auto rather than breaking
   const bad = makeEnv(V2, { xtoysWebhookId: "a", deadband: 0, strokeAxis: "nonsense" }, {}, mkHandy());
@@ -374,7 +359,67 @@ console.log("\nstroke axis owner");
   await new Promise(x => setTimeout(x, 5));
   bad.player.t = 0.5; bad.tick();
   eq("invalid value falls back to auto", Object.keys(bad.sent[bad.sent.length-1]).sort(),
-     ["action","at","pitch","playing","roll"]);
+     ["pitch","roll"]);
+}
+
+
+// ---- 17. wire format ----------------------------------------------------
+console.log("\nwire format");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  e.player.t = 0.5; e.tick();
+  const frame = e.raw[e.raw.length - 1];
+  ok("frame is newline terminated", frame.endsWith("\n"), JSON.stringify(frame));
+  ok("exactly one trailing newline", !frame.slice(0, -1).includes("\n"));
+  eq("values are strings", typeof JSON.parse(frame).roll, "string");
+  eq("no protocol keys leak in", Object.keys(JSON.parse(frame)).sort(), ["pitch","roll","stroke"]);
+  eq("no subprotocol when no token", e.conns[0].protocols, undefined);
+  eq("url has no query when no token", e.conns[0].url, "wss://webhook.xtoys.app/abc");
+}
+
+// ---- 18. stop value ------------------------------------------------------
+console.log("\nstop value");
+{
+  const hold = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
+  await hold.client.uploadScript("u"); await hold.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  hold.player.t = 0.5; hold.tick();
+  const before = hold.sent[hold.sent.length - 1];
+  await hold.client.pause();
+  eq("blank holds the last values", hold.sent[hold.sent.length - 1], before);
+
+  const park = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0 });
+  await park.client.uploadScript("u"); await park.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  park.player.t = 0.5; park.tick();
+  await park.client.pause();
+  const m = park.sent[park.sent.length - 1];
+  eq("stopValue 0 parks every channel", Object.keys(m).sort().map(k => k + "=" + m[k]),
+     ["pitch=0","roll=0","stroke=0"]);
+}
+
+// ---- 19. token auth fallback --------------------------------------------
+console.log("\ntoken auth");
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK" });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  eq("first attempt offers the token as a subprotocol", e.conns[0].protocols, ["Bearer", "TOK"]);
+  eq("first attempt keeps the plain url", e.conns[0].url, "wss://webhook.xtoys.app/abc");
+}
+{
+  // server refuses every connection: must walk subprotocol -> query -> none
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysToken: "TOK" });
+  e.FakeWS.rejectAll = true;
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  for (let i = 0; i < 3; i++) { e.FakeWS.lastRetry && e.FakeWS.lastRetry(); await new Promise(r => setTimeout(r, 1200)); }
+  const names = e.conns.map(c => c.protocols ? "subprotocol" : (c.url.includes("token=") ? "query" : "none"));
+  ok("tries subprotocol first", names[0] === "subprotocol", names);
+  ok("falls back to query", names.includes("query"), names);
+  e.FakeWS.rejectAll = false;
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");
