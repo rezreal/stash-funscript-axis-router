@@ -203,10 +203,48 @@ function report() {
     console.log("  0 and no burst = messages dropped, blocking is unusable");
   }
 
+  if (scriptTicks === 0) {
+    console.log("scriptState timer never fired - registered silently, like");
+    console.log("  variableChange does from JavaScript. Manifest-level only.");
+  } else if (scriptFirstTick !== null && lastDate > scriptFirstTick) {
+    console.log("scriptState timer fired " + scriptTicks + " time(s), " +
+                Math.round((scriptTicks / ((lastDate - scriptFirstTick) / 1000)) * 10) / 10 +
+                "/s (asked for 1/s)");
+  } else {
+    console.log("scriptState timer fired " + scriptTicks + " time(s)");
+  }
+
   console.log("--- now check the Job timer, which is the other half ---");
   console.log("Set the Watchdog Job's timer amount to 0.02 and have it call");
   console.log("jobTick(); as a customCode action. 10s should give ~500 ticks;");
   console.log("far fewer means XToys-native scheduling is too slow to render on.");
+}
+
+/* A scriptState timer trigger - XToys-native, so it does not compete with the
+ * interpreter for time the way setInterval does. Documented lower bound is 1s,
+ * which is slower than both setInterval (~8/s measured) and the Watchdog Job
+ * (0.5s), so this is about dependability rather than rate.
+ *
+ * Registering is not firing. cd6c681 found a variableChange trigger registered
+ * from JavaScript registers without complaint and then never fires, while
+ * componentState from JavaScript works - so the type matters and the failure
+ * mode is silence. Hence a counter rather than a hopeful log line. */
+var scriptTicks = 0;
+var scriptFirstTick = null;
+
+function onScriptTimer() {
+  scriptTicks = scriptTicks + 1;
+  if (scriptTicks === 1) {
+    console.log("scriptState timer trigger FIRED - it works from JavaScript");
+    try { scriptFirstTick = Date.now(); } catch (eS) { scriptFirstTick = null; }
+  }
+}
+
+try {
+  registerTrigger({ type: "scriptState", part: "timer", amount: "1" }, onScriptTimer);
+  console.log("scriptState timer trigger registered (firing is a separate question)");
+} catch (e19) {
+  console.log("scriptState timer trigger rejected: " + e19);
 }
 
 /* Call this from a Job timer's customCode to measure the achievable tick rate. */
