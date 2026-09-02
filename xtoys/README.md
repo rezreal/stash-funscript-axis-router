@@ -38,27 +38,47 @@ They are labelled *(reported)* to make the distinction visible, and the Watchdog
 Job clears them when the stash side stops sending — otherwise a scene title
 would sit there implying something is still playing.
 
-## What the JavaScript API gives you for timing
+## The JavaScript does have timers
 
-From the [JavaScript docs](https://guide.xtoys.app/script-creation/javascript.html):
+**Measured with [`timer-test.js`](timer-test.js), against a real setup.** The
+claim that it had none was asserted early and never tested; it is wrong.
 
-- `sleep(ms)` — "Pauses execution of function for the given number of
-  milliseconds"
-- `callAction(jsonData[, block])` — some Actions block, the Timer among them:
-  "Blocks until time is up (only if 'Block Next Action Until Time is Up' is
-  selected)"
-- `setTimeout`, `setInterval` and `Date` are **not documented**. Undocumented is
-  not the same as absent, and nothing here has tested for them.
+```
+setTimeout: function      setInterval: function     sleep: function
+Date: function            performance: undefined    Promise: undefined
+requestAnimationFrame: undefined
+```
 
-What the docs do not say, and what decides whether the XToys side could ever
-render a funscript segment itself rather than being fed samples: whether
-blocking stalls only the calling function or the whole script. If triggers keep
-firing during a `sleep`, a render loop is possible. If they queue behind it, a
-loop costs its own period in latency. If they are dropped, blocking is unusable.
+`setTimeout` fired. `setInterval` fired **142 times in 18.6 s** — and that is
+the number that matters:
 
-[`timer-test.js`](timer-test.js) probes all of that. The router's deadman switch
-is a Job because a Job timer is the one that has been seen to work — not because
-JavaScript was shown to have none.
+- It was asked for **100 ms**, so 10/s was the ceiling. It achieved **7.6/s**
+  wall-clock, or **~8.5/s** discounting the 2 s spent inside a `sleep()`.
+- With a callback that does nothing. A render callback interpolating eight
+  channels and issuing a `callAction` each would be far heavier.
+
+So the interpreter does not reliably hold even 10 Hz on an empty callback.
+That rules out interpolating on the XToys side at any useful resolution — 10 Hz
+is what the plugin already streams, so there is nothing to win. It does **not**
+rule out scheduling: firing at each funscript point is a few Hz for typical
+scripts, and a `setVolume` `rampTime` covering the gap to the next point renders
+the segment at the toy's own rate rather than the interpreter's.
+
+`Date.now()` advances, so a receiver can tell how late a message is — which is
+what a scheduler would need to correct against.
+
+### sleep() stops message delivery
+
+`sleep(2000)` spanned messages 3 → 3: **none arrived during it.** Whether they
+queue behind it or are dropped is not yet established — the probe now also
+counts `setInterval` ticks across the sleep, which separates "only this function
+blocked" from "the whole interpreter stalled". Until that is known, treat
+`sleep()` as unusable for anything that must not miss a message.
+
+### Consequences not yet acted on
+
+The Watchdog Job could move into JavaScript now that `setInterval` exists. It
+works as it is, so this is a note rather than a plan.
 
 ## The channel mapping survives a restart
 

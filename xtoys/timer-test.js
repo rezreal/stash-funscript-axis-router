@@ -32,6 +32,8 @@ var intervalFired = 0;
 
 var sleepBefore = -1;
 var sleepAfter = -1;
+var sleepTicksBefore = -1;
+var sleepTicksAfter = -1;
 var sleepDate = -1;
 var sleepError = "";
 var sleepDone = false;
@@ -70,7 +72,30 @@ function onTimeoutFired() {
 
 function onIntervalFired() {
   intervalFired = intervalFired + 1;
+  /* Say so on the first one. Counting silently meant setInterval looked
+   * identical whether it fired or not until the readout, which needs a scene
+   * playing - so a run without stash said nothing about the more useful of the
+   * two timers. */
+  if (intervalFired === 1) {
+    console.log("setInterval callback FIRED (first of many, counting now)");
+  }
+
+  /* Report from inside the loop rather than from the message handler. The
+   * readout below borrows stash's heartbeat as a clock, which was the right
+   * shape only while a local clock was assumed not to exist - Date does exist,
+   * so the number that decides everything can be had with nothing connected. */
+  if (intervalFired % 50 === 0 && firstDate !== null) {
+    var secs = (Date.now() - firstDate) / 1000;
+    if (secs > 0) {
+      console.log("setInterval: " + intervalFired + " fires in " +
+                  Math.round(secs) + "s = " +
+                  Math.round((intervalFired / secs) * 10) / 10 +
+                  "/s (asked for 10/s)");
+    }
+  }
 }
+
+try { firstDate = Date.now(); } catch (e14) { firstDate = null; }
 
 try {
   setTimeout(onTimeoutFired, 500);
@@ -85,8 +110,6 @@ try {
 } catch (e13) {
   console.log("setInterval unusable: " + e13);
 }
-
-try { firstDate = Date.now(); } catch (e14) { firstDate = null; }
 
 /* --------------------------------------------------------- the real question */
 
@@ -104,9 +127,14 @@ try { firstDate = Date.now(); } catch (e14) { firstDate = null; }
 function testBlocking() {
   sleepDone = true;
   sleepBefore = messages;
+  /* The decisive one. If the interval keeps ticking through the sleep, only
+   * this function is blocked; if it stops too, the whole interpreter stalls and
+   * nothing else in the script runs either. */
+  sleepTicksBefore = intervalFired;
   try {
     sleep(SLEEP_MS);
     sleepAfter = messages;
+    sleepTicksAfter = intervalFired;
     try { sleepDate = Date.now() - firstDate; } catch (e15) { sleepDate = -1; }
   } catch (e16) {
     sleepError = String(e16);
@@ -138,6 +166,16 @@ function report() {
   console.log("setInterval callback fired " + intervalFired + " time(s)");
   console.log("  (both zero with the globals present means they are stubs)");
 
+  /* The whole architecture question in one number. Asked for 100ms, so 10/s is
+   * the ceiling; what it actually sustains through the interpreter is what says
+   * whether the XToys side can render a funscript segment. */
+  if (firstDate !== null && lastDate !== null && lastDate > firstDate) {
+    var seconds = (lastDate - firstDate) / 1000;
+    console.log("setInterval asked for 100ms; achieved " +
+                Math.round((intervalFired / seconds) * 10) / 10 + "/s over " +
+                Math.round(seconds) + "s (10/s is the ceiling here)");
+  }
+
   if (firstDate === null) {
     console.log("Date.now() unavailable - no clock, so lateness cannot be measured");
   } else {
@@ -155,6 +193,11 @@ function report() {
     if (sleepDate >= 0) {
       console.log("  and " + sleepDate + "ms on the clock since load");
     }
+    console.log("setInterval ticked " + (sleepTicksAfter - sleepTicksBefore) +
+                " time(s) during that sleep (about " +
+                Math.round(SLEEP_MS / 100) + " if it kept running)");
+    console.log("  ticks kept coming = sleep blocks only the calling function");
+    console.log("  ticks stopped too = the whole interpreter stalls");
     console.log("  moved  = triggers fire during a sleep, a render loop is possible");
     console.log("  0 then a burst = callbacks queue behind it, loop costs its own period in latency");
     console.log("  0 and no burst = messages dropped, blocking is unusable");
