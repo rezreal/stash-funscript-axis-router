@@ -80,16 +80,40 @@ blocked" from "the whole interpreter stalled". Until that is known, treat
 The Watchdog Job could move into JavaScript now that `setInterval` exists. It
 works as it is, so this is a note rather than a plan.
 
+## Inverting an output
+
+Each output has an **Output N invert** Control. Ticked, the funscript's 0 drives
+that toy to 100 and back — for an axis whose neutral runs the other way, or a
+toy mounted the opposite way round.
+
+It is **per output, not per channel**, so the same channel can drive two toys in
+opposite directions. It is read live, so ticking it mid-scene takes effect on
+the next point with no reload, and it persists like the channel names.
+
+It does not flip the zero driven on pause or by the Watchdog. That is a safety
+floor rather than a position, and flipping it would turn a stop into a toy at
+full.
+
+> **The Control type is a guess.** `inv1`..`inv8` are declared as
+> `"type": "toggle"`, which matches the Toggle in XToys' documented Control set,
+> but the exact string a Script Export uses has not been confirmed against a
+> real one — only `input`, `push` and `slider` have. If the toggles do not
+> appear after loading the script, change `"toggle"` to `"input"` in
+> `xtoys-script.json` and type `1` in the box: the script reads the variable
+> leniently, so anything that is not empty, `0`, `false`, `off` or `no` counts
+> as inverted, and both Control types work unchanged.
+
 ## The channel mapping survives a restart
 
-`out1`..`out8` are listed in the manifest's `persistentVariables`, so XToys keeps
-them after the Script is stopped and carries them across devices:
+`out1`..`out8` and `inv1`..`inv8` are listed in the manifest's
+`persistentVariables`, so XToys keeps them after the Script is stopped and
+carries them across devices:
 
 ```json
-"persistentVariables": ["out1", "out2", ..., "out8"]
+"persistentVariables": ["out1", ..., "out8", "inv1", ..., "inv8"]
 ```
 
-Those eight are the only user-provided configuration here, which is why they are
+Those sixteen are the user-provided configuration here, which is why they are
 the only ones on the list. Nothing else belongs on it:
 
 - the reported fields (Scene, Elapsed, Rate, State, Channels) would come back

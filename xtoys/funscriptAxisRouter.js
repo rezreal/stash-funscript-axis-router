@@ -23,6 +23,16 @@
  *     A single-axis funscript has no channel name in the file, so it arrives
  *     as MAIN. Every other name is verbatim from the funscript.
  *
+ *   Output N invert (inv1..inv8)
+ *     Flips that output: the funscript's 0 drives the toy to 100 and back.
+ *     Per output rather than per channel, so the same channel can drive two
+ *     toys in opposite directions. Read live, so it takes effect on the next
+ *     point without a reload, and remembered like the channel names.
+ *
+ *     It does not flip the zero that a pause or the Watchdog drives - that is
+ *     a safety floor rather than a position, and flipping it would turn a stop
+ *     into a toy at full.
+ *
  *   Scene, Elapsed, Rate, State, Channels (reported)
  *     Display only. They are text inputs because XToys has no read-only
  *     Control, so they can be typed into, but the next status message
@@ -63,12 +73,13 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "dd8de910";             /* content hash, stamped by stamp.mjs */
+var BUILD = "ffe0960c";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
 var CUSTOM_TOY_KEY = "a";   /* key a custom toy's setValue writes to */
 var CONTROL_PREFIX = "out"; /* Controls out1, out2, ... hold channel names */
+var INVERT_PREFIX = "inv"; /* Controls inv1, inv2, ... flip that output */
 var PUMP_MS = 100;          /* how often to look for points that have come due */
 
 var OUTS = TOYS === "" ? [] : TOYS.split(",");
@@ -108,6 +119,22 @@ function channelFor(i) {
   var v = getVariable(CONTROL_PREFIX + (i + 1));
   if (v === undefined || v === null) return "";
   return String(v);
+}
+
+/* Read the same way press() reads a push Control, because what a Toggle puts in
+ * its variable is not documented and has not been seen in an export: anything
+ * that is not clearly off counts as on. That also means it does not matter
+ * whether inv1..inv8 end up as Toggles or as text inputs holding 1 - both work,
+ * which is worth having while the Control type is unconfirmed. */
+function isOn(name) {
+  var v = getVariable(name);
+  if (v === undefined || v === null) return false;
+  var t = String(v);
+  return t !== "" && t !== "0" && t !== "false" && t !== "off" && t !== "no";
+}
+
+function invertedFor(i) {
+  return isOn(INVERT_PREFIX + (i + 1));
 }
 
 /* Toy types do not share one interface: a generic toy takes setVolume with a
@@ -234,7 +261,14 @@ function takeItem(encoded) {
 function dispatch(i, deadline) {
   var remaining = deadline - Date.now();
   if (remaining < 0) remaining = 0;
-  rampOutput(OUTS[i], itemPos, remaining / 1000);
+
+  /* Flipped here rather than where the schedule is parsed, so it is read live -
+   * ticking the box mid-scene takes effect on the next point, with no reload.
+   * Only funscript positions are flipped. The zero that stopAll() and the
+   * Watchdog drive is a safety floor, not a position, and inverting it would
+   * turn a stop into a toy at full. */
+  var pos = invertedFor(i) ? 100 - itemPos : itemPos;
+  rampOutput(OUTS[i], pos, remaining / 1000);
   dueAt[i] = deadline;
   restOf[i] = itemRest;
 }
