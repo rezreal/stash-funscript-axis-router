@@ -60,6 +60,11 @@ try { note("callAction", typeof callAction); } catch (e8) { note("callAction", "
 try { note("registerTrigger", typeof registerTrigger); } catch (e9) { note("registerTrigger", "threw " + e9); }
 try { note("getVariable", typeof getVariable); } catch (e10) { note("getVariable", "threw " + e10); }
 try { note("getXhr", typeof getXhr); } catch (e11) { note("getXhr", "threw " + e11); }
+/* Cancellation decides how a buffered design handles a seek: with it, drop the
+ * pending timers; without it, every scheduled item has to carry a generation
+ * counter and no-op when a newer emit has superseded it. */
+try { note("clearTimeout", typeof clearTimeout); } catch (e20) { note("clearTimeout", "threw " + e20); }
+try { note("clearInterval", typeof clearInterval); } catch (e21) { note("clearInterval", "threw " + e21); }
 
 /* ------------------------------------------------------------- do they fire */
 
