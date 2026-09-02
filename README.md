@@ -198,7 +198,10 @@ Axes are read from whichever container the file uses:
 
 - **v2.0** — `channels: { roll: { actions: [...] }, ... }`
 - **v1.1** — `axes: [ { id: "R1", actions: [...] }, ... ]`
-- **v1.0** — top-level `actions` only, i.e. stroke alone.
+- **v1.0** — top-level `actions` only, i.e. stroke alone. It is the one
+  channel with no name in the file, so it goes out as `MAIN`; every other
+  name is verbatim. A file whose own free-form channel is called `MAIN`
+  collapses into it.
 
 A file carrying the same axis in both containers collapses to one. Per-axis
 `inverted` and `range` are honoured, same as stash does for the Handy.
@@ -251,7 +254,7 @@ Open the browser console. The plugin logs on load, and each stage after it:
 [funscript-axis-router] XToys acknowledged the connection   (only with a token)
 [funscript-axis-router] interactive client ready
 [funscript-axis-router] loading http://.../scene/42/funscript
-[funscript-axis-router] routing 3 axis/axes: roll, pitch, stroke
+[funscript-axis-router] routing 3 axis/axes: roll, pitch, MAIN
 [funscript-axis-router] first status frame: {"title":"My Scene",...,"action":"status"}
 [funscript-axis-router] first axes frame: {"roll":"50",...,"action":"axes"}
 ```

@@ -25,7 +25,7 @@
   // either way round. Channel names go out on the wire exactly as the funscript
   // spells them - we never rename them.
   var AXIS_ALIASES = {
-    l0: "L0", stroke: "L0", pos: "L0", position: "L0",
+    l0: "L0", stroke: "L0", pos: "L0", position: "L0", main: "L0",
     l1: "L1", surge: "L1",
     l2: "L2", sway: "L2",
     r0: "R0", twist: "R0",
@@ -37,6 +37,18 @@
   };
 
   var STROKE_AXIS = "L0";
+
+  // A v1.0 file is a bare `actions` array with no name anywhere in it, so this
+  // is the one channel name we invent rather than read. Uppercase to mark it as
+  // ours: every other name on the wire is verbatim from the funscript.
+  //
+  // It is in AXIS_ALIASES above, which is what makes the dedupe work - a file
+  // carrying both a top-level `actions` array and a channel already meaning L0
+  // ("stroke", "L0", "pos") collapses to one axis. The cost is that a file with
+  // its own free-form channel called "MAIN" collapses into this one too; named
+  // channels are free-form, so that is a real if unlikely collision, and it is
+  // accepted deliberately.
+  var MAIN_CHANNEL = "MAIN";
 
   // Envelope fields. An XToys script trigger dispatches on "action", and
   // "payload" carries the whole channel map as a JSON string so a script can
@@ -131,7 +143,7 @@
 
   // Axes live in one of two containers: v1.1 uses an `axes` array keyed by
   // T-Code id, v2.0 replaced it with a `channels` object keyed by name. A
-  // top-level `actions` array is always the stroke axis.
+  // top-level `actions` array is always the stroke axis, sent as MAIN_CHANNEL.
   //
   // Returns [{ key, id, stroke, timeline }] where `key` is verbatim from the
   // file and `id` is the canonical T-Code id, or null for a channel name we do
@@ -163,7 +175,7 @@
       });
     }
 
-    if (json && Array.isArray(json.actions)) add("stroke", json, true);
+    if (json && Array.isArray(json.actions)) add(MAIN_CHANNEL, json, true);
 
     if (json && Array.isArray(json.axes)) {
       json.axes.forEach(function (a) {

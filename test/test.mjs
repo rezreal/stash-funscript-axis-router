@@ -103,7 +103,7 @@ console.log("\nv2.0 channels");
   ok("interval started", e.hasTick());
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("channel names verbatim (+stroke, no Handy here)", Object.keys(m).sort(), ["pitch","roll","stroke"]);
+  eq("channel names verbatim (+MAIN, no Handy here)", Object.keys(m).sort(), ["MAIN","pitch","roll"]);
   eq("roll interpolated at 500ms", m.roll, "50");
   eq("pitch interpolated at 500ms", m.pitch, "35");
 }
@@ -116,7 +116,7 @@ console.log("\nv1.1 axes array");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.25; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("v1.1 ids sent verbatim", Object.keys(m).sort(), ["L1","R1","stroke"]);
+  eq("v1.1 ids sent verbatim", Object.keys(m).sort(), ["L1","MAIN","R1"]);
   eq("R1 at 250ms", m.R1, "25");
 }
 
@@ -137,7 +137,7 @@ console.log("\nv1.0 single axis");
   await new Promise(r => setTimeout(r, 5));
   ok("without a Handy, stroke IS routed", e2.hasTick());
   e2.player.t = 0.5; e2.tick();
-  eq("stroke value sent", e2.sent[e2.sent.length-1].stroke, "50");
+  eq("MAIN value sent", e2.sent[e2.sent.length-1].MAIN, "50");
 }
 
 // ---- 4. seeking ----------------------------------------------------------
@@ -275,7 +275,7 @@ console.log("\narbitrary channel names");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("unknown names pass through verbatim", Object.keys(m).sort(), ["R1","e-stim","stroke","vibe"]);
+  eq("unknown names pass through verbatim", Object.keys(m).sort(), ["MAIN","R1","e-stim","vibe"]);
   eq("vibe value", m.vibe, "50");
   eq("e-stim value", m["e-stim"], "50");
   eq("R1 kept as R1, not renamed to roll", m.R1, "20");
@@ -311,6 +311,51 @@ console.log("\ndedupe axes vs channels");
   eq("R1 and roll collapse to one axis", Object.keys(m).sort(), ["R1"]);
 }
 
+{
+  // A v1.0 top-level `actions` array goes out as MAIN, and MAIN is aliased to
+  // L0 - which is what stops a file that also names that axis in `channels`
+  // from routing it twice under two names.
+  const dup = { version: "2.0",
+    actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }],
+    channels: { stroke: { actions: [{ at: 0, pos: 100 }, { at: 1000, pos: 0 }] } } };
+  const e = makeEnv(dup, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", xtoysAction: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  e.player.t = 0.5; e.tick();
+  eq("top-level actions and a stroke channel collapse to one MAIN",
+     Object.keys(e.sent[e.sent.length - 1]).sort(), ["MAIN"]);
+}
+
+{
+  // The accepted cost of aliasing MAIN to L0: a free-form channel of that name
+  // collapses into the synthesized one rather than being routed separately.
+  const clash = { version: "2.0",
+    actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }],
+    channels: { MAIN: { actions: [{ at: 0, pos: 100 }, { at: 1000, pos: 0 }] } } };
+  const e = makeEnv(clash, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", xtoysAction: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+  e.player.t = 0.5; e.tick();
+  eq("a file's own MAIN channel collapses into the synthesized one",
+     Object.keys(e.sent[e.sent.length - 1]).sort(), ["MAIN"]);
+}
+
+{
+  // The `axes` setting doc promises MAIN, stroke and L0 all select the main
+  // axis. They resolve through canonicalAxis, so pin all three.
+  const src = { version: "2.0",
+    actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }],
+    channels: { roll: { actions: [{ at: 0, pos: 100 }, { at: 1000, pos: 0 }] } } };
+  for (const filter of ["MAIN", "stroke", "L0", "main"]) {
+    const e = makeEnv(src, { xtoysWebhookId: "abc", deadband: 0, axes: filter, pauseKey: "", heartbeatKey: "", xtoysAction: "", statusMs: 0 });
+    await e.client.uploadScript("u"); await e.client.play(0);
+    await new Promise(r => setTimeout(r, 5));
+    e.player.t = 0.5; e.tick();
+    eq('axes filter "' + filter + '" selects the main axis',
+       Object.keys(e.sent[e.sent.length - 1]).sort(), ["MAIN"]);
+  }
+}
+
 
 // ---- 16. stroke axis ownership ------------------------------------------
 console.log("\nstroke axis owner (checkbox)");
@@ -333,7 +378,7 @@ console.log("\nstroke axis owner (checkbox)");
   const on = await run({ routeStrokeAxis: true }, mkHandy());
   eq("on: Handy never constructed", on.handyBuilt.n, 0);
   eq("on: stroke routed alongside the rest", Object.keys(on.sent[on.sent.length-1]).sort(),
-     ["pitch","roll","stroke"]);
+     ["MAIN","pitch","roll"]);
   await on.client.configure({ connectionKey: "" });
   ok("on: sentinel key so the pipeline runs", on.client.handyKey.indexOf("funscriptAxisRouter") === 0, on.client.handyKey);
 
@@ -345,7 +390,7 @@ console.log("\nstroke axis owner (checkbox)");
   // off + no Handy: stroke still routed, so it is never silently dropped
   const solo = await run({ routeStrokeAxis: false });
   eq("off + no Handy: stroke routed", Object.keys(solo.sent[solo.sent.length-1]).sort(),
-     ["pitch","roll","stroke"]);
+     ["MAIN","pitch","roll"]);
 
   // unset behaves as off
   const dflt = await run({}, mkHandy());
@@ -367,7 +412,7 @@ console.log("\nwire format");
   ok("frame is newline terminated", frame.endsWith("\n"), JSON.stringify(frame));
   ok("exactly one trailing newline", !frame.slice(0, -1).includes("\n"));
   eq("values are strings", typeof JSON.parse(frame).roll, "string");
-  eq("no protocol keys leak in", Object.keys(JSON.parse(frame)).sort(), ["pitch","roll","stroke"]);
+  eq("no protocol keys leak in", Object.keys(JSON.parse(frame)).sort(), ["MAIN","pitch","roll"]);
   eq("no subprotocol when no token", e.conns[0].protocols, undefined);
   eq("url has no query when no token", e.conns[0].url, "wss://webhook.xtoys.app/abc");
 }
@@ -390,7 +435,7 @@ console.log("\nstop value");
   await park.client.pause();
   const m = park.sent[park.sent.length - 1];
   eq("stopValue 0 parks every channel", Object.keys(m).sort().map(k => k + "=" + m[k]),
-     ["pitch=0","roll=0","stroke=0"]);
+     ["MAIN=0","pitch=0","roll=0"]);
 }
 
 // ---- 19. token auth ------------------------------------------------------
@@ -465,7 +510,7 @@ console.log("\npause event");
   e.player.t = 0.5; e.tick();
   await e.client.pause();
   const last2 = e.sent.slice(-2);
-  eq("channels parked first", Object.keys(last2[0]).sort(), ["pitch","roll","stroke"]);
+  eq("channels parked first", Object.keys(last2[0]).sort(), ["MAIN","pitch","roll"]);
   eq("then the pause event", last2[1], { pause: "1" });
 }
 
@@ -505,8 +550,8 @@ console.log("\nscript envelope");
   const m = e.sent[e.sent.length - 1];
   eq("default action name", m.action, "axes");
   ok("no payload copy by default", m.payload === undefined, Object.keys(m));
-  eq("flat channel keys still present", [m.roll, m.pitch, m.stroke], ["50","35","50"]);
-  eq("frame is channels plus action only", Object.keys(m).sort(), ["action","pitch","roll","stroke"]);
+  eq("flat channel keys still present", [m.roll, m.pitch, m.MAIN], ["50","35","50"]);
+  eq("frame is channels plus action only", Object.keys(m).sort(), ["MAIN","action","pitch","roll"]);
 }
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, xtoysAction: "custom", pauseKey: "", heartbeatKey: "" });
@@ -549,7 +594,7 @@ console.log("\nscript envelope");
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
-  eq("no envelope when blank", Object.keys(e.sent[e.sent.length - 1]).sort(), ["pitch","roll","stroke"]);
+  eq("no envelope when blank", Object.keys(e.sent[e.sent.length - 1]).sort(), ["MAIN","pitch","roll"]);
 }
 
 
@@ -567,7 +612,7 @@ console.log("\nplayer status");
   eq("duration", st.duration, "200");
   eq("paused reported", st.playing, "0");
   eq("title resolved over graphql", st.title, "My Scene");
-  eq("routed channels listed, in file order", st.channels, "stroke,roll,pitch");
+  eq("routed channels listed, in file order", st.channels, "MAIN,roll,pitch");
 }
 
 // ---- 25. remote control --------------------------------------------------
@@ -699,7 +744,7 @@ console.log("\npayload copy");
   on.player.t = 0.5; on.tick();
   const b = on.sent.filter(m => m.action === "axes").pop();
   const inner = JSON.parse(b.payload);
-  eq("present when asked for", Object.keys(inner).sort(), ["pitch","roll","stroke"]);
+  eq("present when asked for", Object.keys(inner).sort(), ["MAIN","pitch","roll"]);
   ok("not nested inside itself", !("payload" in inner) && !("action" in inner));
 
   // a channel really called "payload" is fine while the copy is off

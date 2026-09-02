@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.12.0
+version: 0.13.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -105,7 +105,8 @@ settings:
     description: >-
       Comma-separated axes to forward, e.g. "roll, pitch" or "R1, R2". Leave
       blank to forward every auxiliary axis found in the script. The stroke axis
-      (L0) is never forwarded - the Handy plays it.
+      (L0, sent as the channel "MAIN") is never forwarded - the Handy plays it.
+      Name it here as "MAIN", "stroke" or "L0"; all three select it.
     type: STRING
   updateHz:
     displayName: Update Rate (Hz)
