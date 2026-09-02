@@ -151,8 +151,9 @@ From the [Webhook tool docs](https://guide.xtoys.app/tools/webhook.html):
 - A webhook accepts **GET**, **POST** or **WebSocket**. WebSocket is the one to
   use here, and the docs describe it as suited to continuous exchange.
 - **Every message must have an `action` key.** Not optional — which is why the
-  plugin sends one, and why leaving *Action Name* blank is valid only for a
-  custom toy, never a webhook.
+  plugin always sends one and offers no way to turn it off. Omitting it would
+  only ever have suited a custom toy, and a custom toy cannot be the input here
+  anyway (below).
 - The script gets the `action` value plus every other key/value pair, exposed to
   connected actions as `{trigger-<key>}` and destroyed once they finish.
 - A **private** webhook needs only its Webhook ID. A **shared** webhook also

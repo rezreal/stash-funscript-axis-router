@@ -56,6 +56,12 @@
   // of these names would collide, so it is skipped.
   var RESERVED = { action: true, payload: true };
 
+  // XToys requires an action key on every webhook message - it is what selects
+  // which trigger fires. Not configurable: the only case for omitting it was a
+  // custom toy, and a custom toy cannot receive these messages at all (40
+  // trigger shapes registered against one, none fired - see xtoys/README.md).
+  var ACTION_NAME = "axes";
+
   function reserved(key, cfg) {
     var k = String(key).toLowerCase();
     if (k === "payload") return !!cfg.includePayload;
@@ -221,7 +227,6 @@
     this.includePayload = cfg.includePayload;
     this.logged = {};
     this.onCommand = null;
-    this.action = cfg.xtoysAction;
     this.heartbeatKey = cfg.heartbeatKey;
     this.heartbeatMs = cfg.heartbeatMs;
     this.heartbeatTimer = null;
@@ -361,10 +366,8 @@
     // trigger route, where bindings are static and so cannot read a channel
     // named at runtime. A script using registerTrigger gets the whole map in its
     // callback and has no use for it.
-    if (this.action) {
-      if (this.includePayload) payload.payload = JSON.stringify(payload);
-      payload.action = action || this.action;
-    }
+    if (this.includePayload) payload.payload = JSON.stringify(payload);
+    payload.action = action || ACTION_NAME;
 
     try {
       var frame = JSON.stringify(payload);
@@ -1005,9 +1008,6 @@
       xtoysWebhookId: String(raw.xtoysWebhookId || "").trim(),
       xtoysToken: String(raw.xtoysToken || "").trim(),
       includePayload: raw.includePayload === true || raw.includePayload === "true",
-      xtoysAction: String(
-        raw.xtoysAction === undefined || raw.xtoysAction === null ? "axes" : raw.xtoysAction
-      ).trim(),
       stopValue: stopValue,
       pauseKey: pauseKey,
       heartbeatKey: heartbeatKey,

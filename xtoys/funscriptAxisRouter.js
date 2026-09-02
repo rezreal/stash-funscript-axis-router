@@ -61,8 +61,8 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "cadaace8";             /* content hash, stamped by stamp.mjs */
-var ACTION = "axes";        /* must match the plugin's Action Name setting */
+var BUILD = "af75cd5c";             /* content hash, stamped by stamp.mjs */
+var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
 var CUSTOM_TOY_KEY = "a";   /* key a custom toy's setValue writes to */

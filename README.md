@@ -63,10 +63,12 @@ named at runtime. A script using `registerTrigger` receives the whole map in its
 callback and has no use for it.
 
 The XToys [webhook docs](https://guide.xtoys.app/tools/webhook.html) are explicit
-that *"webhook messages must have an action key"*, so leave *Action Name*
-set for anything webhook-based. Blank drops the envelope and sends bare
-`{"roll":"62"}`, which is only right for a **custom toy**. A channel named `action` is skipped with a console warning while the envelope is
-on, and `payload` likewise only when the payload copy is enabled.
+that *"webhook messages must have an action key"*, so every message carries one:
+`axes` for axis updates, `pause` and `heartbeat` for those. It is not a setting —
+the only reason to omit it was a custom toy, and a custom toy cannot receive
+these messages at all (see [xtoys/README.md](xtoys/)). A channel named `action`
+is skipped with a console warning, and `payload` likewise when the payload copy
+is enabled.
 
 **Channel names are taken verbatim from the funscript.** A v2.0 file with
 `channels: { roll: …, "e-stim": … }` sends `roll` and `e-stim`; a v1.1 file with
@@ -107,7 +109,6 @@ usually a wrong token.
 | Route Stroke Axis Here | off | See *Who drives the stroke axis* below. |
 | Webhook ID | — | From xtoys.app/me → Private Webhooks. Blank disables routing entirely. |
 | Auth Token | — | Only for a **Shared** Webhook; sent as `?token=`. Blank for a Private one. |
-| Action Name | `axes` | Which script trigger fires. Blank sends bare channel/value pairs. |
 | Include Payload Copy | off | Repeat the channels as a JSON string. Doubles frame size; only for the block route. |
 | Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
 | Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
