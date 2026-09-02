@@ -62,8 +62,9 @@ if (!embedded || embedded.length < 1000) {
   fail("manifest", "has componentState block triggers as well as JS - outputs would fire twice");
 } else if (manifest.globalTriggers.length === 0) {
   fail("manifest", "no button triggers - JS-registered variableChange does not fire");
-} else if (embedded.split("\n").length !== standalone.split("\n").length) {
-  fail("manifest", "customFunctions has drifted from funscriptAxisRouter.js");
+} else if (embedded !== standalone) {
+  fail("manifest", "customFunctions has drifted from funscriptAxisRouter.js" +
+                   " - run node xtoys/stamp.mjs");
 } else {
   console.log("  ok");
 }

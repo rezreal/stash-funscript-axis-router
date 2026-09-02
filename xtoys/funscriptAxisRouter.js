@@ -26,9 +26,9 @@
  * so this is "webhook-a" - "stash" is only the label. Setting the name here
  * fails silently: the trigger registers and never fires. */
 var WEBHOOK = "webhook-a";
-var TOYS = "generic-1-a,generic-1-b,generic-1-c";
+var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "478fbbc7";             /* content hash, stamped by stamp.mjs */
+var BUILD = "15a45ba6";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */

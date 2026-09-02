@@ -76,7 +76,7 @@ and play a scene. It drives nothing and reports three things we otherwise have t
 guess at:
 
 - **what your blocks are called** — `getConnectedBlocks()` output, which gives you
-  the real channel names for `OUTPUTS`
+  the real channel names for `TOYS`
 - **whether the triggers fire at all**
 - **the exact `trigger-<key>` data** each message carries
 
@@ -98,7 +98,7 @@ put there.
 
 XToys scripts can run custom JavaScript — the **JS** button in the toolbar while
 editing a Script. That sidesteps importing entirely: paste
-`funscriptAxisRouter.js`, edit the `OUTPUTS` list at the top, done.
+`funscriptAxisRouter.js`, edit the `TOYS` list at the top, done.
 
 It is also better suited to the job. `registerTrigger(json, fn)` hands the
 callback *the whole message* as `trigger-<key>`, so a channel whose name you only
@@ -188,7 +188,7 @@ Webhook block does. If it does not, the Webhook block is the only inbound route.
 1. Add a **Webhook** tool and connect it to the script. Add one **Generic** toy
    per output you want.
 2. Copy the Webhook ID into the plugin's *Webhook ID* setting.
-3. Paste `funscriptAxisRouter.js` into the JS editor and edit `OUTPUTS`, or build
+3. Paste `funscriptAxisRouter.js` into the JS editor and edit `TOYS`, or build
    the blocks by hand as below.
 4. Press play in stash. The browser console lists the channels being routed if
    you are unsure what a file contains.
