@@ -38,6 +38,28 @@ They are labelled *(reported)* to make the distinction visible, and the Watchdog
 Job clears them when the stash side stops sending — otherwise a scene title
 would sit there implying something is still playing.
 
+## What the JavaScript API gives you for timing
+
+From the [JavaScript docs](https://guide.xtoys.app/script-creation/javascript.html):
+
+- `sleep(ms)` — "Pauses execution of function for the given number of
+  milliseconds"
+- `callAction(jsonData[, block])` — some Actions block, the Timer among them:
+  "Blocks until time is up (only if 'Block Next Action Until Time is Up' is
+  selected)"
+- `setTimeout`, `setInterval` and `Date` are **not documented**. Undocumented is
+  not the same as absent, and nothing here has tested for them.
+
+What the docs do not say, and what decides whether the XToys side could ever
+render a funscript segment itself rather than being fed samples: whether
+blocking stalls only the calling function or the whole script. If triggers keep
+firing during a `sleep`, a render loop is possible. If they queue behind it, a
+loop costs its own period in latency. If they are dropped, blocking is unusable.
+
+[`timer-test.js`](timer-test.js) probes all of that. The router's deadman switch
+is a Job because a Job timer is the one that has been seen to work — not because
+JavaScript was shown to have none.
+
 ## The channel mapping survives a restart
 
 `out1`..`out8` are listed in the manifest's `persistentVariables`, so XToys keeps

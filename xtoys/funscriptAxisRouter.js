@@ -61,7 +61,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "af75cd5c";             /* content hash, stamped by stamp.mjs */
+var BUILD = "e1fde722";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -188,8 +188,17 @@ function onPauseMessage(data) {
 }
 
 function onHeartbeat(data) {
-  /* Liveness only. The deadman switch is the Watchdog Job: JavaScript here has
-   * no timer, and sleep() would block the interpreter. */
+  /* Liveness only. The deadman switch is the Watchdog Job, because the Job is
+   * the timer we know works.
+   *
+   * Not because none exists in JavaScript: the XToys JS docs list sleep(ms),
+   * and callAction(json, block) blocking on a Timer Action. What they do not
+   * say is whether blocking stalls only the calling function or the script, so
+   * building the deadman on it would have been a guess. setTimeout/setInterval
+   * are simply undocumented, which is not the same as absent.
+   *
+   * xtoys/timer-test.js probes all of it. Until that has been run against a
+   * real setup, treat "no timer in JavaScript" as untested rather than known. */
 }
 
 function clock(total) {
