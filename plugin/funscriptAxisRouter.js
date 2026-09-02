@@ -99,6 +99,28 @@
     return p < 0 ? 0 : p > 100 ? 100 : p;
   };
 
+  // The points falling in (ms, untilMs], normalised, for streaming ahead rather
+  // than sampling. Absolute script times: the caller turns them into durations,
+  // since only it knows the playback rate.
+  AxisTimeline.prototype.upcoming = function (ms, untilMs, max) {
+    var a = this.actions;
+    var out = [];
+    if (a.length === 0) return out;
+
+    // Deliberately a plain scan from a binary search rather than the valueAt
+    // cursor: emitting runs a few times a second, not per frame, and sharing
+    // the cursor with valueAt would have each reset the other's position.
+    var i = a.length === 1 ? 0 : this.search(ms);
+    while (i > 0 && a[i - 1].at > ms) i--;
+
+    for (; i < a.length && out.length < max; i++) {
+      if (a[i].at <= ms) continue;
+      if (a[i].at > untilMs) break;
+      out.push({ at: a[i].at, pos: Math.round(this.normalise(a[i].pos)) });
+    }
+    return out;
+  };
+
   // Largest index i where actions[i].at <= ms, capped so i+1 stays in range.
   AxisTimeline.prototype.search = function (ms) {
     var a = this.actions;
@@ -396,6 +418,11 @@
   // enough to survive a slow tick or 2x playback at the default 10Hz.
   var SEEK_GAP_MS = 1000;
 
+  // Cap on points per channel per frame. A dense script would otherwise put a
+  // whole second of stroking into one message; past this the receiver is better
+  // served by the next frame.
+  var MAX_POINTS = 24;
+
   function isEmpty(o) {
     for (var k in o) {
       if (Object.prototype.hasOwnProperty.call(o, k)) return false;
@@ -420,6 +447,8 @@
     this.sent = null;        // every channel's last value actually sent
     this.lastTickMs = null;  // previous sample position, to spot a seek
     this.lastSentAt = 0;
+    this.emittedTo = null;   // script time the last schedule reached
+    this.lastRate = 1;       // a rate change invalidates every duration sent
   }
 
   Object.defineProperty(AuxAxisRunner.prototype, "running", {
@@ -509,11 +538,16 @@
     if (this.last && stop !== null) {
       var parked = {};
       Object.keys(this.last).forEach(function (k) {
-        parked[k] = stop;
+        parked[k] = stop + ":0";
       });
       this.sink.send(parked);
     } else if (this.last && !pauseKey) {
-      this.sink.send(this.last);
+      var held = {};
+      var last = this.last;
+      Object.keys(last).forEach(function (k) {
+        held[k] = last[k] + ":0";
+      });
+      this.sink.send(held);
     }
 
     if (pauseKey) this.sink.send(pauseEvent(pauseKey, true), "pause");
@@ -521,6 +555,58 @@
     this.last = null;
     this.sent = null;
     this.lastTickMs = null;
+    this.emittedTo = null;
+  };
+
+  // One channel's upcoming points, as "pos:ms,pos:ms,..." where each ms is the
+  // gap from the previous point - the receiver has no shared time base with the
+  // video, so durations travel and absolute times do not.
+  //
+  // Durations are divided by the playback rate here rather than sent alongside
+  // it. The XToys side then never does arithmetic about time, and a rate change
+  // is just another re-emit, exactly like a seek.
+  AuxAxisRunner.prototype.encode = function (points, fromMs, rate) {
+    var out = "";
+    var prev = fromMs;
+    var i;
+    for (i = 0; i < points.length; i++) {
+      var dt = Math.round((points[i].at - prev) / rate);
+      if (dt < 0) dt = 0;
+      out = out + (out === "" ? "" : ",") + points[i].pos + ":" + dt;
+      prev = points[i].at;
+    }
+    return out;
+  };
+
+  // Every routed channel, every time. XToys merges trigger data rather than
+  // replacing it, so a channel left out of a frame keeps the schedule from the
+  // last one - which was the right behaviour for held values and is exactly
+  // wrong for a schedule that is meant to supersede.
+  AuxAxisRunner.prototype.schedule = function (ms, rate, snap) {
+    var self = this;
+    var until = ms + this.cfg.lookaheadMs * rate;
+    var out = {};
+
+    this.axes.forEach(function (ax) {
+      var points = ax.timeline.upcoming(ms, until, MAX_POINTS);
+      var body = self.encode(points, ms, rate);
+
+      // On a discontinuity the toy sits wherever the previous schedule left it,
+      // which describes a position the player has left. Lead with the value at
+      // the new position and no ramp, so it snaps there before following on.
+      if (snap) {
+        var now = ax.timeline.valueAt(ms);
+        if (now !== null) {
+          body = Math.round(now) + ":0" + (body === "" ? "" : "," + body);
+        }
+      }
+
+      // A channel past its last point still has to say so - an empty value
+      // would merge as "unchanged" and leave the old schedule running.
+      out[ax.key] = body === "" ? "-" : body;
+    });
+
+    return out;
   };
 
   AuxAxisRunner.prototype.sample = function (ms) {
@@ -532,29 +618,11 @@
     return values;
   };
 
-  // Only the channels that actually moved. XToys merges trigger data rather than
-  // replacing it, so a channel left out keeps its previous value on that side -
-  // which is exactly right when it has not moved, and cuts most of the traffic
-  // on a script where one axis is busy and the others are still.
-  AuxAxisRunner.prototype.delta = function (values) {
-    var sent = this.sent;
-    var deadband = this.cfg.deadband;
-    var out = {};
-
-    Object.keys(values).forEach(function (k) {
-      if (sent[k] === undefined || Math.abs(values[k] - sent[k]) >= deadband) {
-        out[k] = values[k];
-      }
-    });
-
-    return out;
-  };
-
   // A partial frame is only safe while playback is continuous. After a seek the
   // other side's held values describe a position we are no longer at, and a
   // channel that happens to land on its previous value would never be corrected.
   AuxAxisRunner.prototype.discontinuous = function (ms) {
-    if (this.sent === null || this.lastTickMs === null) return true;
+    if (this.emittedTo === null || this.lastTickMs === null) return true;
     if (ms < this.lastTickMs) return true;              // seeked backwards
     if (ms - this.lastTickMs > SEEK_GAP_MS) return true; // seeked forwards
     return Date.now() - this.lastSentAt >= this.cfg.maxIdleMs;
@@ -567,25 +635,30 @@
     // Read the clock every tick rather than tracking it from play(position).
     // ScenePlayer has no `seeked` handler, so this is what makes seeking work.
     var ms = player.currentTime() * 1000 + this.cfg.offsetMs;
-    var values = this.sample(ms);
-    var full = this.discontinuous(ms);
-    var payload = full ? values : this.delta(values);
+    var rate = player.playbackRate ? player.playbackRate() : 1;
+    if (!rate || rate <= 0) rate = 1;
+
+    // Kept for the park-on-stop path, which still needs a position rather than
+    // a schedule.
+    this.last = this.sample(ms);
+
+    var jumped = this.discontinuous(ms);
+    if (rate !== this.lastRate) jumped = true;
+
+    // Re-emit once the schedule already sent is half spent. The receiver is
+    // holding points that cover it until then, so emitting sooner just repeats
+    // what it has - this is where the message-rate saving comes from.
+    var halfSpent =
+      this.emittedTo === null || ms >= this.emittedTo - (this.cfg.lookaheadMs * rate) / 2;
 
     this.lastTickMs = ms;
-    this.last = values;
+    this.lastRate = rate;
 
-    if (!full && isEmpty(payload)) return;
+    if (!jumped && !halfSpent) return;
 
-    // only channels actually sent are remembered, so a value skipped by the
-    // deadband is still compared against what the other side last heard
-    if (this.sent === null) this.sent = {};
-    var sent = this.sent;
-    Object.keys(payload).forEach(function (k) {
-      sent[k] = payload[k];
-    });
-
+    this.emittedTo = ms + this.cfg.lookaheadMs * rate;
     this.lastSentAt = Date.now();
-    this.sink.send(payload);
+    this.sink.send(this.schedule(ms, rate, jumped));
   };
 
   /* ----------------------------------------------------------------- remote */
@@ -1017,7 +1090,9 @@
       only: only,
       routeStroke: false, // set by the provider once we know about the Handy
       updateHz: clamp(num(raw.updateHz, 10), 1, 50),
-      deadband: clamp(num(raw.deadband, 2), 0, 50),
+      // How far ahead each frame reaches. Longer rides out a worse connection
+      // and sends fewer messages; shorter means a seek discards less work.
+      lookaheadMs: clamp(num(raw.lookaheadMs, 2000), 200, 10000),
       maxIdleMs: 1000,
       // stash's own funscriptOffset never reaches the client: context.tsx
       // passes it as `offset` while the client reads `scriptOffset`, so we read

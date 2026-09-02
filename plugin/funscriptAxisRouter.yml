@@ -3,7 +3,7 @@ description: >-
   (Beta) Routes the axes of a multi-axis funscript (roll, pitch, surge, ...) to
   an XToys webhook. By default the Handy keeps playing the stroke axis, but any
   axis can be routed instead - see the Stroke Axis Owner setting.
-version: 0.14.0
+version: 0.15.0
 url: https://github.com/stashapp/stash
 
 ui:
@@ -99,17 +99,20 @@ settings:
       (L0, sent as the channel "MAIN") is never forwarded - the Handy plays it.
       Name it here as "MAIN", "stroke" or "L0"; all three select it.
     type: STRING
+  lookaheadMs:
+    displayName: Lookahead (ms)
+    description: >-
+      How far ahead of the playhead each message reaches. Every frame carries
+      the upcoming funscript points for each channel as "position:duration"
+      pairs, and the XToys side schedules them - so this is the buffer that
+      rides out an unstable connection. Longer buffers better and sends fewer
+      messages; shorter discards less work on a seek. Default 2000.
+    type: NUMBER
   updateHz:
     displayName: Update Rate (Hz)
     description: >-
       How often to sample the script and send to XToys. Default 10. Keep this at
       or below the Max Message Frequency configured on the XToys side.
-    type: NUMBER
-  deadband:
-    displayName: Deadband
-    description: >-
-      Skip sending while every axis has moved less than this much (0-100 scale).
-      Default 2. Set to 0 to send on every tick.
     type: NUMBER
   offsetMs:
     displayName: Axis Offset (ms)

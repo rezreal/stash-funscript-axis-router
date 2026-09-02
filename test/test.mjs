@@ -12,6 +12,13 @@ function eq(name, a, b) { ok(name, JSON.stringify(a) === JSON.stringify(b), {got
 // Channel keys of a frame, without the envelope. Every frame carries `action`
 // now that it is not configurable; the envelope has its own tests below, so
 // the routing tests say which channels went out and nothing else.
+// A schedule value is "pos:ms,pos:ms,...". Its first position is what the old
+// sampling frames carried, so an interpolation test asserts head(); a test
+// about what gets scheduled asserts the whole string.
+function head(v) {
+  return String(v).split(",")[0].split(":")[0];
+}
+
 function chans(frame) {
   return Object.keys(frame).filter(function (k) { return k !== "action" && k !== "payload"; }).sort();
 }
@@ -110,8 +117,8 @@ console.log("\nv2.0 channels");
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("channel names verbatim (+MAIN, no Handy here)", chans(m), ["MAIN","pitch","roll"]);
-  eq("roll interpolated at 500ms", m.roll, "50");
-  eq("pitch interpolated at 500ms", m.pitch, "35");
+  eq("roll interpolated at 500ms", head(m.roll), "50");
+  eq("pitch interpolated at 500ms", head(m.pitch), "35");
 }
 
 // ---- 2. v1.1 axes --------------------------------------------------------
@@ -123,7 +130,7 @@ console.log("\nv1.1 axes array");
   e.player.t = 0.25; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("v1.1 ids sent verbatim", chans(m), ["L1","MAIN","R1"]);
-  eq("R1 at 250ms", m.R1, "25");
+  eq("R1 at 250ms", head(m.R1), "25");
 }
 
 // ---- 3. v1.0 has no aux --------------------------------------------------
@@ -143,7 +150,7 @@ console.log("\nv1.0 single axis");
   await new Promise(r => setTimeout(r, 5));
   ok("without a Handy, stroke IS routed", e2.hasTick());
   e2.player.t = 0.5; e2.tick();
-  eq("MAIN value sent", e2.sent[e2.sent.length-1].MAIN, "50");
+  eq("MAIN value sent", head(e2.sent[e2.sent.length-1].MAIN), "50");
 }
 
 // ---- 4. seeking ----------------------------------------------------------
@@ -153,25 +160,29 @@ console.log("\nseek");
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.5; e.tick();
-  eq("forward jump", e.sent[e.sent.length-1].roll, "50");
+  eq("forward jump", head(e.sent[e.sent.length-1].roll), "50");
   e.player.t = 0.25; e.tick();
-  eq("backward seek", e.sent[e.sent.length-1].roll, "25");
+  eq("backward seek", head(e.sent[e.sent.length-1].roll), "25");
   e.player.t = 1.75; e.tick();
-  eq("forward again", e.sent[e.sent.length-1].roll, "25");
+  eq("forward again", head(e.sent[e.sent.length-1].roll), "25");
 }
 
-// ---- 5. deadband ---------------------------------------------------------
-console.log("\ndeadband");
+// ---- 5. emit cadence -----------------------------------------------------
+console.log("\nemit cadence");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 10, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+  // The saving is here. A tick inside the buffer already sent has nothing to
+  // say, so it says nothing; the schedule is topped up once it is half spent.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", lookaheadMs: 2000, pauseKey: "", heartbeatKey: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  e.player.t = 0.5; e.tick();
+  e.player.t = 0; e.tick();
   const n = e.sent.length;
-  e.player.t = 0.51; e.tick();
-  eq("tiny move suppressed", e.sent.length, n);
-  e.player.t = 0.8; e.tick();
-  eq("big move sent", e.sent.length, n + 1);
+  e.player.t = 0.2; e.tick();
+  eq("tick inside the buffer sends nothing", e.sent.length, n);
+  e.player.t = 0.9; e.tick();
+  eq("still nothing just short of half spent", e.sent.length, n);
+  e.player.t = 1.1; e.tick();
+  eq("tops up once half the lookahead is spent", e.sent.length, n + 1);
 }
 
 // ---- 6. pause ------------------------------------------------------------
@@ -245,8 +256,8 @@ console.log("\ninverted + range normalisation");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 1.0; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("inverted flips 100 -> 0", m.roll, "0");
-  eq("range 50 scales 50 -> 100", m.pitch, "100");
+  eq("inverted flips 100 -> 0", head(m.roll), "0");
+  eq("range 50 scales 50 -> 100", head(m.pitch), "100");
 }
 
 // ---- 10. offset + axis filter -------------------------------------------
@@ -258,14 +269,14 @@ console.log("\noffset + axis filter");
   e.player.t = 0.0; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("filtered to roll only", chans(m), ["roll"]);
-  eq("offset applied (t=0 +500ms)", m.roll, "50");
+  eq("offset applied (t=0 +500ms)", head(m.roll), "50");
 }
 {
   const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", heartbeatKey: "", statusMs: 0 }, { funscriptOffset: 1000 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.0; e.tick();
-  eq("falls back to interface.funscriptOffset", e.sent[e.sent.length-1].roll, "100");
+  eq("falls back to interface.funscriptOffset", head(e.sent[e.sent.length-1].roll), "100");
 }
 
 
@@ -282,9 +293,9 @@ console.log("\narbitrary channel names");
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
   eq("unknown names pass through verbatim", chans(m), ["MAIN","R1","e-stim","vibe"]);
-  eq("vibe value", m.vibe, "50");
-  eq("e-stim value", m["e-stim"], "50");
-  eq("R1 kept as R1, not renamed to roll", m.R1, "20");
+  eq("vibe value", head(m.vibe), "50");
+  eq("e-stim value", head(m["e-stim"]), "50");
+  eq("R1 kept as R1, not renamed to roll", head(m.R1), "20");
 }
 
 // ---- 13. filter accepts either spelling ----------------------------------
@@ -432,7 +443,12 @@ console.log("\nstop value");
   hold.player.t = 0.5; hold.tick();
   const before = hold.sent[hold.sent.length - 1];
   await hold.client.pause();
-  eq("blank holds the last values", hold.sent[hold.sent.length - 1], before);
+  const held = hold.sent[hold.sent.length - 1];
+  // Same positions, but as a schedule with no ramp rather than a bare number:
+  // one wire format, so the XToys side needs only one parser.
+  eq("blank holds the last positions",
+     chans(held).map(k => k + "=" + held[k]).sort(),
+     chans(before).map(k => k + "=" + head(before[k]) + ":0").sort());
 
   const park = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, pauseKey: "", heartbeatKey: "", statusMs: 0 });
   await park.client.uploadScript("u"); await park.client.play(0);
@@ -440,7 +456,7 @@ console.log("\nstop value");
   park.player.t = 0.5; park.tick();
   await park.client.pause();
   const m = park.sent[park.sent.length - 1];
-  eq("stopValue 0 parks every channel", chans(m).map(k => k + "=" + m[k]),
+  eq("stopValue 0 parks every channel", chans(m).map(k => k + "=" + head(m[k])),
      ["MAIN=0","pitch=0","roll=0"]);
 }
 
@@ -556,7 +572,7 @@ console.log("\nscript envelope");
   const m = e.sent[e.sent.length - 1];
   eq("default action name", m.action, "axes");
   ok("no payload copy by default", m.payload === undefined, Object.keys(m));
-  eq("flat channel keys still present", [m.roll, m.pitch, m.MAIN], ["50","35","50"]);
+  eq("flat channel keys still present", [head(m.roll), head(m.pitch), head(m.MAIN)], ["50","35","50"]);
   eq("frame is channels plus action only", Object.keys(m).sort(), ["MAIN","action","pitch","roll"]);
 }
 {
@@ -590,8 +606,8 @@ console.log("\nscript envelope");
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   const m = e.sent[e.sent.length - 1];
-  eq("colliding channels skipped", JSON.parse(m.payload), { roll: "50" });
-  ok("only the collisions were dropped", m.roll === "50");
+  eq("colliding channels skipped", Object.keys(JSON.parse(m.payload)).sort(), ["roll"]);
+  ok("only the collisions were dropped", head(m.roll) === "50");
   eq("action survives intact", m.action, "axes");
 }
 {
@@ -764,7 +780,7 @@ console.log("\npayload copy");
   await new Promise(r => setTimeout(r, 5));
   c.player.t = 0.5; c.tick();
   const d = c.sent.filter(m => m.action === "axes").pop();
-  eq("a channel named payload survives when the copy is off", d.payload, "50");
+  eq("a channel named payload survives when the copy is off", head(d.payload), "50");
 }
 
 
@@ -846,46 +862,63 @@ console.log("\nper-channel debounce");
   await new Promise(r => setTimeout(r, 5));
 
   e.player.t = 0.0; e.tick();
-  eq("first frame carries every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+  eq("first frame carries every channel", chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 
-  // continuous playback: only pitch has moved past the deadband
-  e.player.t = 0.2; e.tick();
-  eq("only the channel that moved", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch"]);
-  e.player.t = 0.4; e.tick();
-  eq("still only the mover", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch"]);
-
-  // nothing moves at all -> nothing sent
+  // A schedule supersedes rather than updates, and XToys merges trigger data -
+  // so a channel left out of a frame would keep the previous schedule running.
+  // Every frame carries every channel, however still that channel is.
   const n = e.sent.length;
-  e.player.t = 0.401; e.tick();
-  eq("no movement sends nothing", e.sent.length, n);
+  e.player.t = 0.2; e.tick();
+  eq("nothing sent while the buffer covers it", e.sent.length, n);
+  e.player.t = 1.2; e.tick();
+  eq("the top-up still carries every channel",
+     chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 
   // a seek must resend everything, even channels sitting on their old value
   e.player.t = 3.0; e.tick();
-  eq("seek forward resends every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+  eq("seek forward resends every channel", chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 
   e.player.t = 0.5; e.tick();
-  eq("seek backward resends every channel", Object.keys(e.sent[e.sent.length-1]).sort(), ["action","pitch","roll"]);
+  eq("seek backward resends every channel", chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 }
+// ---- playback rate -------------------------------------------------------
+console.log("\nplayback rate");
 {
-  // a channel held below the deadband for a long time must not drift out of
-  // sync: comparison is against what was last SENT, not last sampled
+  // Durations are scaled here rather than sent alongside the rate, so the XToys
+  // side never does arithmetic about time. That makes a rate change a re-emit,
+  // exactly like a seek - and it has to be, or every duration already sent
+  // describes the wrong tempo.
   const fs = { version: "2.0", channels: {
-    creep: { actions: [{ at: 0, pos: 0 }, { at: 10000, pos: 100 }] } } };
-  const e = makeEnv(fs, { xtoysWebhookId: "abc", deadband: 5, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+    creep: { actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }] } } };
+  const e = makeEnv(fs, { xtoysWebhookId: "abc", lookaheadMs: 2000, pauseKey: "", heartbeatKey: "", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
 
   e.player.t = 0; e.tick();
-  const first = e.sent[e.sent.length-1].creep;
-  eq("starts at 0", first, "0");
+  eq("at 1x, the point 1s away is 1000ms away",
+     e.sent[e.sent.length-1].creep, "0:0,100:1000");
 
-  // +1 per 100ms; four ticks is +4, still inside the deadband
-  for (const t of [0.1, 0.2, 0.3, 0.4]) { e.player.t = t; e.tick(); }
-  eq("held below the deadband, nothing sent", e.sent[e.sent.length-1].creep, "0");
+  const n = e.sent.length;
+  e.player.rate = 2; e.player.t = 0; e.tick();
+  ok("a rate change re-emits rather than waiting", e.sent.length === n + 1);
+  eq("at 2x, the same point is 500ms away",
+     e.sent[e.sent.length-1].creep, "0:0,100:500");
 
-  // the fifth crosses it, measured from the last sent value
-  e.player.t = 0.5; e.tick();
-  eq("crosses the deadband against last sent", e.sent[e.sent.length-1].creep, "5");
+  e.player.rate = 0.5; e.player.t = 0; e.tick();
+  eq("at 0.5x, 2000ms away", e.sent[e.sent.length-1].creep, "0:0,100:2000");
+}
+{
+  // A channel past its last point still has to say so. An empty value would
+  // merge as "unchanged" on the XToys side and leave the old schedule running.
+  const fs = { version: "2.0", channels: {
+    done: { actions: [{ at: 0, pos: 0 }, { at: 100, pos: 100 }] } } };
+  const e = makeEnv(fs, { xtoysWebhookId: "abc", lookaheadMs: 2000, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  e.player.t = 5.0; e.tick();
+  const v = e.sent[e.sent.length-1].done;
+  ok("a spent channel is still present", v !== undefined && v !== "");
 }
 
 console.log("\n" + passes + " passed, " + fails + " failed");

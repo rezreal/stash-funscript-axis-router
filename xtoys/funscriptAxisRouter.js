@@ -38,10 +38,12 @@
  *     part that has never been confirmed working against a real setup.
  *
  *   rampMs, watchdogMs, skipSeconds (advanced)
- *     rampMs is how long a toy takes to reach each new value - raise it if
- *     the motion is steppy, lower it if it lags. watchdogMs is the deadman
- *     switch: nothing from stash for that long and every output drops to
- *     zero. skipSeconds is the Rewind/Forward jump.
+ *     rampMs is now only a floor. Each movement's duration comes from the
+ *     funscript itself - stash sends the upcoming points as "position:ms"
+ *     pairs and this schedules them - so rampMs only applies to a point that
+ *     arrives with no time left to reach it. watchdogMs is the deadman switch:
+ *     nothing from stash for that long and every output drops to zero.
+ *     skipSeconds is the Rewind/Forward jump.
  *
  * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow
  * functions, no template literals, no anonymous nested functions, no DOM.
@@ -61,12 +63,13 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "54c8b4be";             /* content hash, stamped by stamp.mjs */
+var BUILD = "85db24be";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
-var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
+var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
 var CUSTOM_TOY_KEY = "a";   /* key a custom toy's setValue writes to */
 var CONTROL_PREFIX = "out"; /* Controls out1, out2, ... hold channel names */
+var PUMP_MS = 100;          /* how often to look for points that have come due */
 
 var OUTS = TOYS === "" ? [] : TOYS.split(",");
 
@@ -109,7 +112,7 @@ function channelFor(i) {
 
 /* Toy types do not share one interface: a generic toy takes setVolume with a
  * percentVolume, a custom toy takes setValue with a key. */
-function driveToy(toy, percent) {
+function driveToy(toy, percent, seconds) {
   if (toy.indexOf("generic-custom-toy") === 0) {
     callAction({
       type: "updateComponent",
@@ -125,15 +128,17 @@ function driveToy(toy, percent) {
     type: "updateComponent",
     channel: toy,
     action: "setVolume",
-    rampTime: numVar("rampMs", RAMP_MS) / 1000,
+    /* The schedule supplies this. rampMs is only the floor, for a point that
+     * lands with no time left - without it a late dispatch would step. */
+    rampTime: Math.max(seconds, numVar("rampMs", RAMP_MS) / 1000),
     percentVolume: String(percent)
   });
 }
 
-function setOutput(toy, percent) {
+function rampOutput(toy, percent, seconds) {
   if (!toy) return;
   try {
-    driveToy(toy, percent);
+    driveToy(toy, percent, seconds);
   } catch (e) {
     console.log("could not drive '" + toy + "': " + e +
                 " - check it against the channels in your Script Export");
@@ -142,8 +147,9 @@ function setOutput(toy, percent) {
 
 function stopAll() {
   for (var i = 0; i < OUTS.length; i++) {
-    setOutput(OUTS[i], 0);
+    rampOutput(OUTS[i], 0, 0);
   }
+  clearSchedule();
 }
 
 /* --------------------------------------------------------------- messages */
@@ -172,13 +178,115 @@ function sceneHasChannel(name) {
   return ("," + lastChannels + ",").indexOf("," + name + ",") !== -1;
 }
 
+/* ---------------------------------------------------------------- schedule */
+
+/* The plugin sends the upcoming funscript points per channel as
+ *
+ *     "50:0,100:340,0:500"
+ *
+ * meaning: be at 50 now, reach 100 in 340ms, then 0 in a further 500ms. The
+ * ramp does the rendering - setVolume was measured to retarget mid-flight, so
+ * a new schedule landing on a moving toy turns it round rather than jolting it.
+ *
+ * Durations arrive already divided by the playback rate, so nothing here does
+ * arithmetic about tempo.
+ *
+ * Parallel arrays rather than an array of objects: a nested structure inside a
+ * closure has misbehaved in this interpreter before, and these are indexed by
+ * output, which is a small fixed count. */
+var dueAt = [];    /* when this output should have reached its target */
+var restOf = [];   /* the schedule still to be dispatched, encoded */
+
+/* Scratch for takeItem, which cannot return a pair. */
+var itemPos = 0;
+var itemDt = 0;
+var itemRest = "";
+
+function takeItem(encoded) {
+  itemPos = -1;
+  itemDt = 0;
+  itemRest = "";
+  if (!encoded || encoded === "" || encoded === "-") return false;
+
+  var comma = encoded.indexOf(",");
+  var head = comma === -1 ? encoded : encoded.substring(0, comma);
+  itemRest = comma === -1 ? "" : encoded.substring(comma + 1);
+
+  var colon = head.indexOf(":");
+  if (colon === -1) return false;
+
+  var p = parseFloat(head.substring(0, colon));
+  var d = parseFloat(head.substring(colon + 1));
+  if (isNaN(p)) return false;
+  if (isNaN(d) || d < 0) d = 0;
+
+  if (p < 0) p = 0;
+  if (p > 100) p = 100;
+  itemPos = Math.round(p);
+  itemDt = d;
+  return true;
+}
+
+/* Ramp toward the item, over whatever is left of its slot. A late dispatch
+ * shortens the ramp instead of shifting it, so the point is still reached when
+ * the funscript says - error stays inside one segment rather than accumulating
+ * down the chain. */
+function dispatch(i, deadline) {
+  var remaining = deadline - Date.now();
+  if (remaining < 0) remaining = 0;
+  rampOutput(OUTS[i], itemPos, remaining / 1000);
+  dueAt[i] = deadline;
+  restOf[i] = itemRest;
+}
+
 function onAxes(data) {
   if (halted) return;
+  var now = Date.now();
+
   for (var i = 0; i < OUTS.length; i++) {
     var name = channelFor(i);
-    if (!sceneHasChannel(name)) continue;
-    var v = readValue(data, name);
-    if (v !== null) setOutput(OUTS[i], v);
+    if (!name || !sceneHasChannel(name)) continue;
+
+    var encoded = data["trigger-" + name];
+    if (encoded === undefined || encoded === null) continue;
+
+    /* A schedule supersedes rather than adds to. The plugin re-emits on every
+     * seek, pause and rate change, so whatever was queued for this output
+     * describes a position the player has left. */
+    if (!takeItem(String(encoded))) {
+      restOf[i] = "";
+      continue;
+    }
+    dispatch(i, now + itemDt);
+  }
+}
+
+/* Fires everything whose slot has run out. setInterval was measured at about
+ * 8/s, which is granularity rather than interpreter speed - a setVolume call
+ * costs 0.3ms - so this wakes coarsely and dispatches whatever is due. */
+function pump() {
+  if (halted) return;
+  var now = Date.now();
+
+  for (var i = 0; i < OUTS.length; i++) {
+    if (!restOf[i]) continue;
+    /* not there yet - the ramp is still running */
+    if (now < dueAt[i]) continue;
+
+    if (!takeItem(restOf[i])) {
+      restOf[i] = "";
+      continue;
+    }
+    /* Chain from the slot that just ended, not from now, so a late wake-up
+     * does not push every later point back with it. */
+    dispatch(i, dueAt[i] + itemDt);
+  }
+}
+
+function clearSchedule() {
+  for (var i = 0; i < OUTS.length; i++) {
+    dueAt[i] = 0;
+    restOf[i] = "";
   }
 }
 
@@ -239,7 +347,7 @@ function onStatus(data) {
      * whatever the last scene left it on. */
     if (previous !== null) {
       for (var i = 0; i < OUTS.length; i++) {
-        if (!sceneHasChannel(channelFor(i))) setOutput(OUTS[i], 0);
+        if (!sceneHasChannel(channelFor(i))) rampOutput(OUTS[i], 0, 0);
       }
     }
   }
@@ -348,6 +456,19 @@ function onMessage(data) {
 }
 
 registerTrigger({ type: "componentState", channel: WEBHOOK, action: "*" }, onMessage);
+
+/* Measured at about 8/s asking for 100ms. That is the scheduling granularity,
+ * not a limit on work: dispatch costs 0.3ms per call, so a wake-up can fire
+ * every point that has come due. Points closer together than a wake-up are
+ * dispatched in the same pass, which is why the ramp carries the timing rather
+ * than the interval. */
+try {
+  setInterval(pump, PUMP_MS);
+  console.log("scheduler running every " + PUMP_MS + "ms");
+} catch (e) {
+  console.log("setInterval unavailable, so only the first point of each " +
+              "schedule will play: " + e);
+}
 
 /* The buttons are NOT wired up here. A variableChange trigger registered from
  * JavaScript never fires when a Control changes - pressing Play produced no log

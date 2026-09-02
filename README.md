@@ -48,13 +48,29 @@ that one file — the JavaScript is inlined in it.
 One newline-terminated JSON object per update:
 
 ```
-{"roll":"62","pitch":"41","action":"axes"}\n
+{"roll":"50:0,100:340,0:500","pitch":"35:0,80:1500","action":"axes"}\n
 ```
 
-Channels appear as flat keys, values `0`–`100` as strings, plus one envelope
-field: **`action`**, which selects the trigger inside an XToys script. Axis
-updates use the configured name (`axes` by default); pause and heartbeat use
-`pause` and `heartbeat`, so a script can react to each separately.
+Channels appear as flat keys. Each value is the **upcoming funscript points**
+for that channel as `position:duration` pairs — *be at 50 now, reach 100 in
+340 ms, then 0 in a further 500 ms*. Positions are `0`–`100`; durations are
+milliseconds from the previous point, already divided by the playback rate, so
+the XToys side does no arithmetic about tempo.
+
+The XToys script schedules those and hands each to its toy as a ramp, so the toy
+traverses the funscript's own segment at its own rate rather than following a
+10 Hz staircase. Each frame **supersedes** the last, and every routed channel is
+present in every frame — XToys merges trigger data, so a channel left out would
+keep the previous schedule running. A channel past its last point sends `-`.
+
+Frames go out a few times a second rather than at `Update Rate`: one is only
+sent once the schedule already sent is half spent, or immediately on a seek,
+pause or playback-rate change, since each of those invalidates every duration in
+flight. See *Lookahead*.
+
+Plus one envelope field: **`action`**, which selects the trigger inside an XToys
+script. Axis updates use `axes`; pause and heartbeat use `pause` and
+`heartbeat`, so a script can react to each separately.
 
 *Include Payload Copy* adds a `payload` field repeating the same map as one JSON
 string. It is **off by default** — it doubles every frame, and only helps the
@@ -257,7 +273,7 @@ Open the browser console. The plugin logs on load, and each stage after it:
 [funscript-axis-router] loading http://.../scene/42/funscript
 [funscript-axis-router] routing 3 axis/axes: roll, pitch, MAIN
 [funscript-axis-router] first status frame: {"title":"My Scene",...,"action":"status"}
-[funscript-axis-router] first axes frame: {"roll":"50",...,"action":"axes"}
+[funscript-axis-router] first axes frame: {"roll":"50:0,100:500",...,"action":"axes"}
 ```
 
 The `first … frame` lines print once per message kind — axis updates run at 10 Hz,
