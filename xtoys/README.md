@@ -94,24 +94,27 @@ It does not flip the zero driven on pause or by the Watchdog. That is a safety
 floor rather than a position, and flipping it would turn a stop into a toy at
 full.
 
-> **These are text inputs, not checkboxes, and that is not for want of trying.**
-> Type `1` to invert, blank or `0` to leave it alone.
+> **A Toggle needs `up` and `down`, or it does not render.** That is the whole
+> reason the first attempt showed nothing:
 >
-> XToys does have a Toggle button — the [Controls
-> docs](https://guide.xtoys.app/script-creation/definitions.html) list it — but
-> **no page documents the `type` string a Script Export uses for any Control**,
-> and `"toggle"` is not it: XToys drops a Control whose type it does not
-> recognise, silently, so all eight vanished while the other twenty-two loaded.
-> The three strings known here — `input`, `push`, `slider` — all came from
-> reading a real export. The app bundle is no help: it is obfuscated with
-> rotated string arrays, and the Controls editor is a lazily-loaded chunk behind
-> a login, so none of the type strings appear in anything publicly served.
+> ```json
+> { "id": "inv1", "name": "Output 1 invert", "type": "toggle",
+>   "up": "normal", "down": "invert" }
+> ```
 >
-> To upgrade these to real checkboxes, add one Toggle Control by hand in the
-> XToys editor, export the Script, and read the `type` it wrote. Put that string
-> in place of `input` for `inv1`..`inv8` and nothing else has to change — the
-> script reads the variable leniently, so anything that is not empty, `0`,
-> `false`, `off` or `no` counts as inverted, whichever Control holds it.
+> `"toggle"` was the right type all along — XToys just drops a Control it cannot
+> fully build, silently, so all eight vanished while the other twenty-two
+> loaded. No page documents this: the Controls docs list the kinds by name and
+> give no JSON at all, and the app bundle is obfuscated with the editor in a
+> lazily-loaded chunk behind a login. It came from a real Script Export, which
+> is where every other manifest fact here came from too.
+>
+> Whether `up`/`down` are the labels for the two states or the values the
+> variable takes is still unknown, so the script accepts both: `1`, `true`,
+> `on`, `yes`, `invert` and `inverted` all count as inverted, and anything else
+> does not. That way round on purpose — an unrecognised value that reads as off
+> leaves the motion as written, where one that read as on would invert a toy
+> with nothing in the UI to say why.
 
 ## The channel mapping survives a restart
 

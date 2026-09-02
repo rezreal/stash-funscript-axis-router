@@ -73,7 +73,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "f914d699";             /* content hash, stamped by stamp.mjs */
+var BUILD = "c70fba3b";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -121,16 +121,23 @@ function channelFor(i) {
   return String(v);
 }
 
-/* Read the same way press() reads a push Control, because what a Toggle puts in
- * its variable is not documented and has not been seen in an export: anything
- * that is not clearly off counts as on. That also means it does not matter
- * whether inv1..inv8 end up as Toggles or as text inputs holding 1 - both work,
- * which is worth having while the Control type is unconfirmed. */
+/* On only for a value that clearly says so, rather than off only for a value
+ * that clearly says otherwise.
+ *
+ * A Toggle Control carries `up` and `down`, and whether those are the labels
+ * for its two states or the values the variable takes is not documented - so
+ * the variable may hold "1" or it may hold "invert". Both are accepted. The
+ * allowlist runs that way round because the failure modes are not equal: an
+ * unrecognised value reading as off leaves motion as the funscript wrote it,
+ * while reading as on would silently invert a toy with no way to tell from the
+ * UI that it had. A text input holding 1 still works, which keeps the fallback
+ * from before honest. */
 function isOn(name) {
   var v = getVariable(name);
   if (v === undefined || v === null) return false;
-  var t = String(v);
-  return t !== "" && t !== "0" && t !== "false" && t !== "off" && t !== "no";
+  var t = String(v).toLowerCase();
+  return t === "1" || t === "true" || t === "on" || t === "yes" ||
+         t === "invert" || t === "inverted";
 }
 
 function invertedFor(i) {
