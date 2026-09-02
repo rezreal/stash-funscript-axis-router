@@ -68,6 +68,18 @@ sent once the schedule already sent is half spent, or immediately on a seek,
 pause or playback-rate change, since each of those invalidates every duration in
 flight. See *Lookahead*.
 
+**Latency and jitter.** A frame that continues the previous one does not reset
+the XToys side's clock — it chains onto the schedule already running, so a late
+message is absorbed rather than dragging everything after it. Only a
+discontinuity re-anchors, which the plugin marks by leading the frame with a
+duration of `0`. Raising *Lookahead* therefore helps twice: fewer frames, and
+fewer chances to be knocked off. It does not help with steady latency, where the
+toy simply trails the video — that is what *Offset* is for.
+
+A very dense channel is capped at 24 points per frame, so a frame can cover less
+than *Lookahead* asks. Top-ups are timed on what the frame actually reached, not
+on the setting, or a fast script would run its schedule dry between frames.
+
 Plus one envelope field: **`action`**, which selects the trigger inside an XToys
 script. Axis updates use `axes`; pause and heartbeat use `pause` and
 `heartbeat`, so a script can react to each separately.

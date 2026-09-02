@@ -447,7 +447,9 @@
     this.sent = null;        // every channel's last value actually sent
     this.lastTickMs = null;  // previous sample position, to spot a seek
     this.lastSentAt = 0;
-    this.emittedTo = null;   // script time the last schedule reached
+    this.emittedTo = null;   // script time the last schedule actually reached
+    this.emittedFrom = 0;    // and where it started, so "half spent" is real
+    this.coveredTo = 0;
     this.lastRate = 1;       // a rate change invalidates every duration sent
   }
 
@@ -587,8 +589,19 @@
     var until = ms + this.cfg.lookaheadMs * rate;
     var out = {};
 
+    // How far this frame really reaches. A channel cut off by MAX_POINTS covers
+    // less than the window asks, and topping up on the window would let its
+    // schedule run dry mid-buffer - the toy would simply stop between points.
+    // Only truncated channels count: one that has run out of script has nothing
+    // more to send, and treating that as a short frame would re-emit forever.
+    this.coveredTo = until;
+
     this.axes.forEach(function (ax) {
       var points = ax.timeline.upcoming(ms, until, MAX_POINTS);
+      if (points.length === MAX_POINTS) {
+        var last = points[points.length - 1].at;
+        if (last < self.coveredTo) self.coveredTo = last;
+      }
       var body = self.encode(points, ms, rate);
 
       // On a discontinuity the toy sits wherever the previous schedule left it,
@@ -649,16 +662,18 @@
     // holding points that cover it until then, so emitting sooner just repeats
     // what it has - this is where the message-rate saving comes from.
     var halfSpent =
-      this.emittedTo === null || ms >= this.emittedTo - (this.cfg.lookaheadMs * rate) / 2;
+      this.emittedTo === null || ms >= this.emittedFrom + (this.emittedTo - this.emittedFrom) / 2;
 
     this.lastTickMs = ms;
     this.lastRate = rate;
 
     if (!jumped && !halfSpent) return;
 
-    this.emittedTo = ms + this.cfg.lookaheadMs * rate;
     this.lastSentAt = Date.now();
-    this.sink.send(this.schedule(ms, rate, jumped));
+    this.emittedFrom = ms;
+    var frame = this.schedule(ms, rate, jumped);
+    this.emittedTo = this.coveredTo;
+    this.sink.send(frame);
   };
 
   /* ----------------------------------------------------------------- remote */

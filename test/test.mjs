@@ -881,6 +881,31 @@ console.log("\nper-channel debounce");
   e.player.t = 0.5; e.tick();
   eq("seek backward resends every channel", chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 }
+// ---- frame coverage ------------------------------------------------------
+console.log("\nframe coverage");
+{
+  // A dense channel gets cut off by MAX_POINTS well short of the lookahead.
+  // Topping up on the window rather than on what was actually sent would let
+  // the schedule run dry mid-buffer, and the toy would stop between points.
+  const dense = [];
+  for (let i = 0; i <= 400; i++) dense.push({ at: i * 50, pos: i % 2 ? 100 : 0 });
+  const fs = { version: "2.0", channels: { fast: { actions: dense } } };
+
+  const e = makeEnv(fs, { xtoysWebhookId: "abc", lookaheadMs: 10000, pauseKey: "", heartbeatKey: "", statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  e.player.t = 0; e.tick();
+  const points = e.sent[e.sent.length-1].fast.split(",").length;
+  ok("a dense channel is capped, not unbounded", points <= 25, points);
+
+  // 24 points at 50ms apart covers ~1.2s, nowhere near the 10s asked for, so
+  // the top-up has to come at about 600ms rather than at 5s
+  const n = e.sent.length;
+  e.player.t = 0.8; e.tick();
+  ok("tops up on what was covered, not on the lookahead", e.sent.length > n);
+}
+
 // ---- playback rate -------------------------------------------------------
 console.log("\nplayback rate");
 {

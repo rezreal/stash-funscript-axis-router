@@ -63,7 +63,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "85db24be";             /* content hash, stamped by stamp.mjs */
+var BUILD = "a67aa314";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -257,7 +257,25 @@ function onAxes(data) {
       restOf[i] = "";
       continue;
     }
-    dispatch(i, now + itemDt);
+
+    /* Where the new schedule starts from is what decides whether network jitter
+     * is audible.
+     *
+     * A leading duration of 0 is the plugin saying "snap here first", which it
+     * only sends on a discontinuity - a seek, a pause, a rate change. Then the
+     * timeline genuinely restarts and now is the right anchor.
+     *
+     * Otherwise this frame continues the one before it, and anchoring on
+     * arrival would drag the whole schedule by however late the message was -
+     * once per frame, for good. Chaining from the deadline already running
+     * keeps playback on the timeline the first frame established, so a frame
+     * that arrives late is absorbed instead of accumulating. Lateness only
+     * shows up as a shortened ramp, and only on the point it arrived for. */
+    var anchor = now;
+    if (itemDt > 0 && dueAt[i] > 0 && dueAt[i] > now - PUMP_MS) {
+      anchor = dueAt[i];
+    }
+    dispatch(i, anchor + itemDt);
   }
 }
 
