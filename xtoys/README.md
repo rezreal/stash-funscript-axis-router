@@ -38,6 +38,28 @@ They are labelled *(reported)* to make the distinction visible, and the Watchdog
 Job clears them when the stash side stops sending — otherwise a scene title
 would sit there implying something is still playing.
 
+## The channel mapping survives a restart
+
+`out1`..`out8` are listed in the manifest's `persistentVariables`, so XToys keeps
+them after the Script is stopped and carries them across devices:
+
+```json
+"persistentVariables": ["out1", "out2", ..., "out8"]
+```
+
+Those eight are the only user-provided configuration here, which is why they are
+the only ones on the list. Nothing else belongs on it:
+
+- the reported fields (Scene, Elapsed, Rate, State, Channels) would come back
+  showing a scene that is not playing — the exact thing the Watchdog clears
+- `Speed` and `Seek` describe the track being played, not a preference, and both
+  have a `variableChange` trigger that would send a command to stash on load
+- `lastBeat` is the Watchdog's counter
+
+`rampMs`, `skipSeconds` and `watchdogMs` could be added: `seed()` only writes
+when a variable is empty, so a persisted value survives rather than being reset
+to the default. They are left off because they are tuning, not configuration.
+
 ## Controls bind by `id`, not by name
 
 A Control's **`id`** is the variable it reads and writes; **`name`** is only its
