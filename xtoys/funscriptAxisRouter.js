@@ -63,7 +63,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "a67aa314";             /* content hash, stamped by stamp.mjs */
+var BUILD = "dd8de910";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -308,21 +308,16 @@ function clearSchedule() {
   }
 }
 
-function onPauseMessage(data) {
-  halted = String(data["trigger-pause"]) === "1";
-  if (halted) stopAll();
-}
-
-function onHeartbeat(data) {
-  /* Liveness only. The deadman switch is the Watchdog Job - though no longer
-   * because JavaScript has no timer, which was asserted here for a long time
-   * and is simply false: timer-test.js measured setTimeout, setInterval, sleep
-   * and Date all present and working.
-   *
-   * The Job stays because it works and moving it buys nothing. Worth knowing if
-   * that changes: setInterval asked for 100ms delivers about 8/s with an empty
-   * callback, so it is a scheduler, not a render clock. */
-}
+/* There is no heartbeat message any more. Status arrives every second whether
+ * anything changed or not, so it is the liveness signal too - and it is what
+ * feeds the Watchdog Job below.
+ *
+ * The Watchdog stays a Job rather than JavaScript, though no longer because
+ * JavaScript has no timer: that was asserted here for a long time and is simply
+ * false. timer-test.js measured setTimeout, setInterval, sleep and Date all
+ * present and working. It stays because it works and moving it buys nothing.
+ * Worth knowing if that changes: setInterval asked for 100ms delivers about
+ * 8/s with an empty callback, so it is a scheduler, not a render clock. */
 
 function clock(total) {
   total = Math.max(0, Math.round(total));
@@ -335,7 +330,19 @@ function clock(total) {
  * so "Channels in scene" can display the variable `Channels`. */
 function onStatus(data) {
   setUiVariable("Scene", data["trigger-title"] || "");
-  setUiVariable("Playing", data["trigger-playing"] === "1" ? "playing" : "paused");
+
+  /* Status carries the transport, so there is no separate pause message. It
+   * matters more than it used to: a buffered schedule would otherwise play on
+   * for up to a whole lookahead after the video stopped. stash publishes status
+   * immediately on play and pause, not just on the interval, so this lands at
+   * the transition rather than up to a second late. */
+  var playing = data["trigger-playing"] === "1";
+  if (playing === halted) {
+    halted = !playing;
+    if (halted) stopAll();
+  }
+
+  setUiVariable("Playing", playing ? "playing" : "paused");
 
   var pos = parseFloat(data["trigger-position"]) || 0;
   var dur = parseFloat(data["trigger-duration"]) || 0;
@@ -468,9 +475,7 @@ function onMessage(data) {
   setUiVariable("lastBeat", 0);
 
   if (action === ACTION) onAxes(data);
-  else if (action === "pause") onPauseMessage(data);
   else if (action === "status") onStatus(data);
-  else if (action === "heartbeat") onHeartbeat(data);
 }
 
 registerTrigger({ type: "componentState", channel: WEBHOOK, action: "*" }, onMessage);

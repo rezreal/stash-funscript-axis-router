@@ -249,9 +249,6 @@
     this.includePayload = cfg.includePayload;
     this.logged = {};
     this.onCommand = null;
-    this.heartbeatKey = cfg.heartbeatKey;
-    this.heartbeatMs = cfg.heartbeatMs;
-    this.heartbeatTimer = null;
     this.url =
       "wss://webhook.xtoys.app/" +
       cfg.xtoysWebhookId +
@@ -268,29 +265,6 @@
   XToysSink.prototype.open = function () {
     this.closed = false;
     this.connect();
-    this.startHeartbeat();
-  };
-
-  // A deadman switch. It deliberately keeps running while playback is paused,
-  // so the XToys side can tell "paused" (heartbeats, no axis values) apart from
-  // "the browser is gone" (nothing at all) and shut its outputs down only for
-  // the latter. Closing the tab, crashing, or losing the network all stop these.
-  XToysSink.prototype.startHeartbeat = function () {
-    if (this.heartbeatTimer !== null || !this.heartbeatKey || !this.heartbeatMs) {
-      return;
-    }
-    var self = this;
-    this.heartbeatTimer = setInterval(function () {
-      var beat = {};
-      beat[self.heartbeatKey] = 1;
-      self.send(beat, "heartbeat");
-    }, this.heartbeatMs);
-  };
-
-  XToysSink.prototype.stopHeartbeat = function () {
-    if (this.heartbeatTimer === null) return;
-    clearInterval(this.heartbeatTimer);
-    this.heartbeatTimer = null;
   };
 
   XToysSink.prototype.connect = function () {
@@ -430,12 +404,6 @@
     return true;
   }
 
-  function pauseEvent(key, paused) {
-    var e = {};
-    e[key] = paused ? 1 : 0;
-    return e;
-  }
-
   function AuxAxisRunner(sink, cfg) {
     this.sink = sink;
     this.cfg = cfg;
@@ -510,11 +478,6 @@
     if (this.timer !== null || !this.hasAxes) return;
     this.sink.open();
 
-    // Paired with the pause event below, so a script that halted on pause has
-    // something to resume on. The timer guard above means this fires once per
-    // real transition, not on every play() the player emits.
-    if (this.cfg.pauseKey) this.sink.send(pauseEvent(this.cfg.pauseKey, false), "pause");
-
     var self = this;
     this.timer = setInterval(function () {
       self.tick();
@@ -526,33 +489,22 @@
     clearInterval(this.timer);
     this.timer = null;
 
-    // Three things can happen on stop, and they compose:
+    // Stop Value parks every channel at a set value. Zero is not a neutral for
+    // every axis - 50 is centre for roll and pitch, 0 is off for a vibe - so it
+    // is opt-in, and without it the last positions are held so nothing lurches.
     //
-    //   Stop Value  - park every channel at a set value. Zero is not a neutral
-    //                 for every axis (50 is centre for roll and pitch, 0 is off
-    //                 for a vibe), so this is opt-in.
-    //   Pause Event - a single message your script can halt on, rather than
-    //                 inferring a stop from values that went quiet.
-    //   neither     - hold the last values, so nothing lurches.
+    // Either way the frame is what stops the schedule running on: it supersedes
+    // whatever was buffered, with no time left to run.
     var stop = this.cfg.stopValue;
-    var pauseKey = this.cfg.pauseKey;
 
-    if (this.last && stop !== null) {
+    if (this.last) {
       var parked = {};
-      Object.keys(this.last).forEach(function (k) {
-        parked[k] = stop + ":0";
-      });
-      this.sink.send(parked);
-    } else if (this.last && !pauseKey) {
-      var held = {};
       var last = this.last;
       Object.keys(last).forEach(function (k) {
-        held[k] = last[k] + ":0";
+        parked[k] = (stop !== null ? stop : last[k]) + ":0";
       });
-      this.sink.send(held);
+      this.sink.send(parked);
     }
-
-    if (pauseKey) this.sink.send(pauseEvent(pauseKey, true), "pause");
 
     this.last = null;
     this.sent = null;
@@ -692,12 +644,10 @@
     this.title = "";
     this.channels = [];
     this.peers = [];
-    this.last = null;
   }
 
   PlayerRemote.prototype.setChannels = function (names) {
     this.channels = names || [];
-    this.last = null;
     this.publish();
   };
 
@@ -709,7 +659,6 @@
     this.sceneId = id;
     this.title = "";
     this.channels = [];
-    this.last = null;
 
     var self = this;
     try {
@@ -723,7 +672,6 @@
           self.title = sc.title || (file && file.basename) || "Scene " + id;
           // republish straight away rather than leaving the title blank on
           // screen until the next status tick
-          self.last = null;
           self.publish();
         })
         .catch(function (e) {
@@ -743,7 +691,13 @@
     }, this.cfg.statusMs);
   };
 
-  PlayerRemote.prototype.publish = function () {
+  // `playing` can be forced, because on a transition the player may not have
+  // updated paused() yet when the client is called - and reading it a moment
+  // too early would report the old state. That was survivable when a separate
+  // pause message carried the transport; now that status is the only thing
+  // saying stop, a stale value leaves the XToys side playing its buffer for up
+  // to a whole status interval after the video stopped.
+  PlayerRemote.prototype.publish = function (playing) {
     var p = InteractiveUtils.getPlayer();
     if (!p) return;
 
@@ -753,21 +707,23 @@
       scene: this.sceneId || "",
       position: Math.round(p.currentTime() || 0),
       duration: Math.round(isFinite(duration) ? duration : 0),
-      playing: p.paused() ? 0 : 1,
+      playing: playing === undefined ? (p.paused() ? 0 : 1) : playing,
       rate: p.playbackRate ? p.playbackRate() : 1,
       // what this scene actually carries, so a remote can list the names that
       // are worth mapping to an output instead of the user guessing
       channels: this.channels.join(","),
     };
 
-    // position ticks every second anyway, so only skip when truly unchanged
-    var key = [
-      status.title, status.position, status.duration, status.playing,
-      status.channels, status.rate,
-    ].join("|");
-    if (key === this.last) return;
-    this.last = key;
-
+    // Sent every time, not only on change. This is the deadman signal as well
+    // as the display: the XToys side's Watchdog zeroes its outputs when nothing
+    // has arrived for watchdogMs, and axis frames stop while paused - which is
+    // exactly when a change-gated status would fall silent too. That silence is
+    // what a separate heartbeat used to paper over.
+    //
+    // It also carries `playing`, and publish() runs immediately on play and
+    // pause, so it is how the other side learns to stop the schedule it has
+    // buffered. Three jobs on one message: make it lazy again and all three
+    // break together.
     this.sink.send(status, "status");
   };
 
@@ -1010,13 +966,13 @@
 
   RouterClient.prototype.play = function (pos) {
     this.runner.start();
-    if (this.remote) this.remote.publish();
+    if (this.remote) this.remote.publish(1);
     return Promise.resolve(this.handy ? this.handy.play(pos) : undefined);
   };
 
   RouterClient.prototype.pause = function () {
     this.runner.stop();
-    if (this.remote) this.remote.publish();
+    if (this.remote) this.remote.publish(0);
     return Promise.resolve(this.handy ? this.handy.pause() : undefined);
   };
 
@@ -1073,19 +1029,6 @@
     var stopRaw = String(raw.stopValue === undefined ? "" : raw.stopValue).trim();
     var stopValue = stopRaw === "" ? null : clamp(num(stopRaw, 0), 0, 100);
 
-    // unset falls back to "heartbeat"; explicitly blank disables the deadman
-    var heartbeatKey = String(
-      raw.heartbeatKey === undefined || raw.heartbeatKey === null
-        ? "heartbeat"
-        : raw.heartbeatKey
-    ).trim();
-    var heartbeatMs = clamp(num(raw.heartbeatMs, 1000), 200, 60000);
-
-    // unset falls back to "pause"; explicitly blank disables the event
-    var pauseKey = String(
-      raw.pauseKey === undefined || raw.pauseKey === null ? "pause" : raw.pauseKey
-    ).trim();
-
     // Off means "let the Handy have the stroke axis if one is configured"; this
     // plugin still takes it when there is no Handy, since otherwise nothing
     // would play it at all.
@@ -1097,9 +1040,6 @@
       xtoysToken: String(raw.xtoysToken || "").trim(),
       includePayload: raw.includePayload === true || raw.includePayload === "true",
       stopValue: stopValue,
-      pauseKey: pauseKey,
-      heartbeatKey: heartbeatKey,
-      heartbeatMs: heartbeatMs,
       remoteControl: raw.remoteControl === true || raw.remoteControl === "true",
       statusMs: clamp(num(raw.statusMs, 1000), 0, 60000),
       only: only,
@@ -1163,6 +1103,7 @@
     );
 
     var sink = new XToysSink(cfg);
+
     var runner = new AuxAxisRunner(sink, cfg);
     var remote = cfg.statusMs || cfg.remoteControl ? new PlayerRemote(sink, cfg) : null;
 

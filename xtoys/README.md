@@ -151,7 +151,6 @@ connected blocks: [...]
 diagnostic ready; listening on channel 'webhook-a'
 status #1  {trigger-title = My Scene, trigger-position = 0, ...}
 axes #1    {trigger-roll = 50, trigger-pitch = 35, trigger-payload = {...}, ...}
-heartbeat #1  {...}
 ```
 
 **Nothing at all** means `WEBHOOK` at the top does not match the channel name of
@@ -260,11 +259,14 @@ Webhook block does. If it does not, the Webhook block is the only inbound route.
 
 ## What it reacts to
 
-Three triggers, matching the `action` the plugin sends:
+Two triggers, matching the `action` the plugin sends:
 
-- **`axes`** — sets each mapped output.
-- **`pause`** — `1` zeroes every output and holds, `0` releases.
-- **`heartbeat`** — liveness for the watchdog.
+- **`axes`** — the upcoming funscript points per channel, which the script
+  schedules and hands to each output as a ramp.
+- **`status`** — scene, position, rate, channel list, and `playing`. Sent every
+  interval whether anything changed or not, so it doubles as the watchdog's
+  liveness signal, and immediately on pause, which is what stops a buffered
+  schedule playing on.
 
 ## Remote controlling the player
 

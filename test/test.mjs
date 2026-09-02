@@ -37,7 +37,7 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     playbackRate(v) { if (v !== undefined) { this.rate = v; calls.push("rate:" + v); } return this.rate; },
     pause() { this.isPaused = true; calls.push("pause"); },
   };
-  let tickFn = null, hbSlot = null, stSlot = null, tickMs = null;
+  let tickFn = null, stSlot = null, tickMs = null;
 
   const raw = [], conns = [];
   class FakeWS {
@@ -55,12 +55,14 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     console, Promise, JSON, Math, Date, Object, Array, isFinite, parseFloat, URL, Error,
     WebSocket: FakeWS,
     setTimeout, clearTimeout,
+    // Two intervals now the heartbeat is gone: the runner's tick at updateHz
+    // (100ms by default) and status at statusMs (1000). Status registers first,
+    // from uploadScript, so tell them apart by period rather than by order.
     setInterval: (fn, ms) => {
-      if (ms === 1000) { if (hbSlot === null) { hbSlot = fn; return 2; } stSlot = fn; return 3; }
-      if (ms >= 200 && ms !== tickMs && hbSlot === null) { hbSlot = fn; return 2; }
+      if (ms >= 200) { stSlot = fn; return 3; }
       tickFn = fn; tickMs = ms; return 1;
     },
-    clearInterval: (id) => { if (id === 2) hbSlot = null; else if (id === 3) stSlot = null; else tickFn = null; },
+    clearInterval: (id) => { if (id === 3) stSlot = null; else tickFn = null; },
     fetch: async () => ({ ok: true, json: async () => funscript }),
     window: {
       PluginApi: {
@@ -85,7 +87,7 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
     stashConfig: { interface: iface, plugins: { funscriptAxisRouter: pluginSettings || {} } },
   };
   const client = InteractiveUtils.interactiveClientProvider(opts);
-  return { client, sent, raw, conns, FakeWS, player, calls, handyBuilt, sock: () => FakeWS.last, beat: () => hbSlot && hbSlot(), hasBeat: () => !!hbSlot, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
+  return { client, sent, raw, conns, FakeWS, player, calls, handyBuilt, sock: () => FakeWS.last, status: () => stSlot && stSlot(), hasStatus: () => !!stSlot, tick: () => tickFn && tickFn(), hasTick: () => !!tickFn };
 }
 
 const V2 = {
@@ -504,61 +506,67 @@ console.log("\nserver ack");
 }
 
 
-// ---- 21. pause event -----------------------------------------------------
-console.log("\npause event");
+// ---- 21. transport on status ---------------------------------------------
+console.log("\ntransport");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "", statusMs: 0 });
+  // No pause message any more: status carries `playing`, and publish() runs on
+  // play and pause rather than only on the interval, so the transition arrives
+  // at once. That matters more with a buffer than it did with samples - the
+  // XToys side would otherwise keep playing a schedule for up to a whole
+  // lookahead after the video stopped.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", statusMs: 1000 });
   await e.client.uploadScript("u");
   await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  eq("resume event on start", e.sent[0], { pause: "0", action: "pause" });
+
+  const played = e.sent.filter((m) => m.action === "status");
+  ok("status published on play", played.length > 0);
+  eq("and says it is playing", played[played.length - 1].playing, "1");
+
   e.player.t = 0.5; e.tick();
   await e.client.pause();
-  eq("pause event on stop", e.sent[e.sent.length - 1], { pause: "1", action: "pause" });
-  eq("it is its own message, not mixed into values", chans(e.sent[e.sent.length - 1]), ["pause"]);
+  const paused = e.sent.filter((m) => m.action === "status");
+  eq("status published again on pause", paused[paused.length - 1].playing, "0");
+
+  ok("no pause message is sent at all",
+     e.sent.filter((m) => m.action === "pause").length === 0);
+  ok("no heartbeat message either",
+     e.sent.filter((m) => m.action === "heartbeat").length === 0);
 }
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "halt", heartbeatKey: "", statusMs: 0 });
+  // Status is the deadman signal now, so it must not go quiet when nothing has
+  // changed - which while paused is everything. That silence is what the
+  // heartbeat used to cover.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", statusMs: 1000 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   await e.client.pause();
-  eq("key is configurable", e.sent[e.sent.length - 1], { halt: "1", action: "pause" });
+
+  const before = e.sent.filter((m) => m.action === "status").length;
+  e.status(); e.status();
+  const after = e.sent.filter((m) => m.action === "status").length;
+  ok("status keeps arriving with nothing changed", after === before + 2, {before, after});
 }
 {
-  // pause event + stop value compose: park the channels, then signal the halt
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, stopValue: 0, heartbeatKey: "", statusMs: 0 });
+  // stop value + schedules: the park frame is what supersedes the buffer, so
+  // it has to be the last thing sent, with no time left to run.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", stopValue: 0, statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
   e.player.t = 0.5; e.tick();
   await e.client.pause();
-  const last2 = e.sent.slice(-2);
-  eq("channels parked first", chans(last2[0]), ["MAIN","pitch","roll"]);
-  eq("then the pause event", last2[1], { pause: "1", action: "pause" });
+  const last = e.sent[e.sent.length - 1];
+  eq("channels parked, with no ramp left",
+     chans(last).map(k => k + "=" + last[k]).sort(), ["MAIN=0:0","pitch=0:0","roll=0:0"]);
 }
 
-// ---- 22. heartbeat -------------------------------------------------------
-console.log("\nheartbeat");
 {
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, pauseKey: "", statusMs: 0 });
+  // statusMs 0 turns the publisher off entirely - and with it the only liveness
+  // signal, so the XToys Watchdog will zero the outputs. Documented as such.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", statusMs: 0 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  ok("heartbeat timer started", e.hasBeat());
-  const n = e.sent.length;
-  e.beat();
-  eq("heartbeat message", e.sent[e.sent.length - 1], { heartbeat: "1", action: "heartbeat" });
-  ok("heartbeat is a separate frame", e.sent.length === n + 1);
-
-  // the whole point: still beating while paused, so "paused" != "browser gone"
-  await e.client.pause();
-  ok("heartbeat survives pause", e.hasBeat());
-  e.beat();
-  eq("still beating while paused", e.sent[e.sent.length - 1], { heartbeat: "1", action: "heartbeat" });
-}
-{
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0, heartbeatKey: "", pauseKey: "", statusMs: 0 });
-  await e.client.uploadScript("u"); await e.client.play(0);
-  await new Promise(r => setTimeout(r, 5));
-  ok("blank key disables the heartbeat", !e.hasBeat());
+  ok("statusMs 0 sends nothing periodic", !e.hasStatus());
 }
 
 
@@ -583,17 +591,18 @@ console.log("\nscript envelope");
   eq("action name is always axes", e.sent[e.sent.length - 1].action, "axes");
 }
 {
-  // pause and heartbeat get their own action names so a script can trigger on them
-  const e = makeEnv(V2, { xtoysWebhookId: "abc", deadband: 0 });
+  // Two action names left, and only two. A script triggers on "axes" for the
+  // schedules and "status" for everything else.
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", statusMs: 1000 });
   await e.client.uploadScript("u"); await e.client.play(0);
   await new Promise(r => setTimeout(r, 5));
-  const resume = e.sent.filter(m => m.action === "pause")[0];
-  eq("resume uses the pause action", resume.action, "pause");
-  eq("resume carries the pause key", resume.pause, "0");
-  e.beat();
-  eq("heartbeat uses its own action", e.sent[e.sent.length - 1].action, "heartbeat");
+  e.player.t = 0.5; e.tick();
+  e.status();
   await e.client.pause();
-  eq("pause uses the pause action", e.sent[e.sent.length - 1].action, "pause");
+
+  const actions = {};
+  e.sent.forEach((m) => { actions[m.action] = true; });
+  eq("only axes and status go out", Object.keys(actions).sort(), ["axes","status"]);
 }
 {
   // a channel colliding with the envelope must be dropped, not corrupt the message

@@ -81,8 +81,8 @@ than *Lookahead* asks. Top-ups are timed on what the frame actually reached, not
 on the setting, or a fast script would run its schedule dry between frames.
 
 Plus one envelope field: **`action`**, which selects the trigger inside an XToys
-script. Axis updates use `axes`; pause and heartbeat use `pause` and
-`heartbeat`, so a script can react to each separately.
+script. There are only two: `axes` for the schedules, and `status` for
+everything else.
 
 *Include Payload Copy* adds a `payload` field repeating the same map as one JSON
 string. It is **off by default** — it doubles every frame, and only helps the
@@ -92,7 +92,7 @@ callback and has no use for it.
 
 The XToys [webhook docs](https://guide.xtoys.app/tools/webhook.html) are explicit
 that *"webhook messages must have an action key"*, so every message carries one:
-`axes` for axis updates, `pause` and `heartbeat` for those. It is not a setting —
+`axes` for the schedules and `status` for the rest. It is not a setting —
 the only reason to omit it was a custom toy, and a custom toy cannot receive
 these messages at all (see [xtoys/README.md](xtoys/)). A channel named `action`
 is skipped with a console warning, and `payload` likewise when the payload copy
@@ -138,9 +138,6 @@ usually a wrong token.
 | Webhook ID | — | From xtoys.app/me → Private Webhooks. Blank disables routing entirely. |
 | Auth Token | — | Only for a **Shared** Webhook; sent as `?token=`. Blank for a Private one. |
 | Include Payload Copy | off | Repeat the channels as a JSON string. Doubles frame size; only for the block route. |
-| Pause Event Key | `pause` | Own message on pause (`1`) and resume (`0`). Blank disables. |
-| Heartbeat Key | `heartbeat` | Deadman switch; blank disables. |
-| Heartbeat Interval (ms) | `1000` | Make your script's timeout 2–3× this. |
 | Allow Remote Control | off | Let XToys drive playback. See *Remote control* below. |
 | Status Interval (ms) | `1000` | How often to publish title/position/duration. `0` disables. |
 | Stop Value | — | What to send every channel on stop. Blank holds the last values; `0` parks vibrations. |
@@ -206,20 +203,24 @@ See [xtoys/README.md](xtoys/README.md) for the control names to add.
 
 ## Stopping safely
 
-Three independent things happen when playback stops, and they compose:
+Two things happen when playback stops:
 
-- **Pause Event Key** (default `pause`) — a message of its own, `{"pause":"1"}`
-  on pause and `{"pause":"0"}` on resume, so your script can halt in one place
-  rather than inferring a stop from values that went quiet.
+- **The status message says so.** It carries `playing`, and is published the
+  moment you pause rather than only on its interval — which matters now that
+  frames are buffered, or the XToys side would play on for up to a whole
+  *Lookahead* after the video stopped. The transport is stated rather than read
+  back off the player, since the player has not always updated by then.
 - **Stop Value** — park every channel at a set value. Blank holds the last
-  values, because zero is not a neutral for every axis (50 is centre for roll and
-  pitch, 0 is off for a vibe). Set it to `0` if any channel drives a vibrator.
-- **Heartbeat** (default `heartbeat`, every 1000 ms) — a deadman switch. It keeps
-  beating *while paused*, so your script can tell "paused" (heartbeats, no axis
-  values) apart from "the browser is gone" (nothing at all) and shut its outputs
-  down only for the latter. Closing the tab, a crash, or a dropped network all
-  stop the beat. Make your script's timeout two or three intervals long so one
-  late message does not trip it.
+  positions, because zero is not a neutral for every axis (50 is centre for roll
+  and pitch, 0 is off for a vibrator). Either way the park frame is what
+  supersedes whatever schedule was still buffered.
+
+**There is no separate heartbeat or pause message.** Status is sent every
+interval whether anything changed or not, so it is the deadman signal too:
+closing the tab, a crash, or a dropped network all stop it, and the XToys side's
+Watchdog zeroes its outputs. Make that watchdog two or three status intervals
+long so one late message does not trip it. Setting *Status Interval* to `0`
+turns the publisher off entirely — and with it the only liveness signal.
 
 ## Script formats
 
