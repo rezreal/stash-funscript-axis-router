@@ -414,7 +414,6 @@
     this.last = null;        // every channel's last sampled value
     this.sent = null;        // every channel's last value actually sent
     this.lastTickMs = null;  // previous sample position, to spot a seek
-    this.lastSentAt = 0;
     this.emittedTo = null;   // script time the last schedule actually reached
     this.emittedFrom = 0;    // and where it started, so "half spent" is real
     this.coveredTo = 0;
@@ -496,6 +495,14 @@
     // Either way the frame is what stops the schedule running on: it supersedes
     // whatever was buffered, with no time left to run.
     var stop = this.cfg.stopValue;
+
+    // Sampled here rather than kept fresh by every tick. The tick ran sample()
+    // ten times a second across every axis to have this ready for a moment that
+    // happens once, on pause - real work on a phone, for nothing.
+    var player = InteractiveUtils.getPlayer();
+    if (player && this.axes.length) {
+      this.last = this.sample(player.currentTime() * 1000 + this.cfg.offsetMs);
+    }
 
     if (this.last) {
       var parked = {};
@@ -586,11 +593,19 @@
   // A partial frame is only safe while playback is continuous. After a seek the
   // other side's held values describe a position we are no longer at, and a
   // channel that happens to land on its previous value would never be corrected.
+  // Only a real discontinuity. This decides whether the frame leads with a snap,
+  // and a snap tells the other side to re-anchor its clock and jump the toy to
+  // where the playhead is - right after a seek, wrong at any other time.
+  //
+  // It used to also return true once nothing had been sent for maxIdleMs, so a
+  // sampled frame could refresh values held on the far side. With schedules
+  // that fired about once a second, which is roughly the emit cadence - so
+  // nearly every frame carried a snap, the receiver re-anchored on all of them,
+  // and the toy jumped at every frame boundary instead of gliding through it.
   AuxAxisRunner.prototype.discontinuous = function (ms) {
     if (this.emittedTo === null || this.lastTickMs === null) return true;
     if (ms < this.lastTickMs) return true;              // seeked backwards
-    if (ms - this.lastTickMs > SEEK_GAP_MS) return true; // seeked forwards
-    return Date.now() - this.lastSentAt >= this.cfg.maxIdleMs;
+    return ms - this.lastTickMs > SEEK_GAP_MS;          // seeked forwards
   };
 
   AuxAxisRunner.prototype.tick = function () {
@@ -602,10 +617,6 @@
     var ms = player.currentTime() * 1000 + this.cfg.offsetMs;
     var rate = player.playbackRate ? player.playbackRate() : 1;
     if (!rate || rate <= 0) rate = 1;
-
-    // Kept for the park-on-stop path, which still needs a position rather than
-    // a schedule.
-    this.last = this.sample(ms);
 
     var jumped = this.discontinuous(ms);
     if (rate !== this.lastRate) jumped = true;
@@ -621,7 +632,6 @@
 
     if (!jumped && !halfSpent) return;
 
-    this.lastSentAt = Date.now();
     this.emittedFrom = ms;
     var frame = this.schedule(ms, rate, jumped);
     this.emittedTo = this.coveredTo;
@@ -1048,7 +1058,6 @@
       // How far ahead each frame reaches. Longer rides out a worse connection
       // and sends fewer messages; shorter means a seek discards less work.
       lookaheadMs: clamp(num(raw.lookaheadMs, 2000), 200, 10000),
-      maxIdleMs: 1000,
       // stash's own funscriptOffset never reaches the client: context.tsx
       // passes it as `offset` while the client reads `scriptOffset`, so we read
       // it off the config ourselves.

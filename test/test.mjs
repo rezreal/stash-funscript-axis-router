@@ -890,6 +890,62 @@ console.log("\nper-channel debounce");
   e.player.t = 0.5; e.tick();
   eq("seek backward resends every channel", chans(e.sent[e.sent.length-1]), ["pitch","roll"]);
 }
+// ---- snapping ------------------------------------------------------------
+console.log("\nsnapping");
+{
+  // A leading duration of 0 tells the XToys side to re-anchor its clock and
+  // jump the toy to the playhead. Right after a seek; wrong at any other time,
+  // because it discards the timeline the buffer was riding on and lands as a
+  // step in the motion.
+  const lead = (v) => Number(String(v).split(",")[0].split(":")[1]);
+
+  const e = makeEnv(V2, { xtoysWebhookId: "abc", lookaheadMs: 2000, statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  // In 100ms steps, the way the tick actually sees playback. Jumping the
+  // playhead a second in one tick is a seek by any definition, and would snap
+  // for the right reason.
+  e.player.t = 0; e.tick();
+  eq("the first frame snaps", lead(e.sent[e.sent.length-1].roll), 0);
+
+  for (let t = 0.1; t <= 1.2; t += 0.1) { e.player.t = t; e.tick(); }
+  ok("a continuation does not", lead(e.sent[e.sent.length-1].roll) > 0,
+     e.sent[e.sent.length-1].roll);
+
+  e.player.t = 8.0; e.tick();
+  eq("a seek does", lead(e.sent[e.sent.length-1].roll), 0);
+}
+{
+  // The regression this pins fired on wall-clock idling, not on playback: the
+  // emitter used to force a snap once nothing had been sent for a second, which
+  // is about the emit cadence - so nearly every frame snapped and the toy
+  // stepped at every frame boundary. The rest of the suite ticks far faster
+  // than real time, so nothing here could reach that threshold. This waits.
+  const lead = (v) => Number(String(v).split(",")[0].split(":")[1]);
+  const pts = [];
+  for (let i = 0; i <= 40; i++) pts.push({ at: i * 500, pos: i % 2 ? 100 : 0 });
+  const slow = { version: "2.0", channels: { roll: { actions: pts } } };
+
+  const e = makeEnv(slow, { xtoysWebhookId: "abc", lookaheadMs: 2000, statusMs: 0 });
+  await e.client.uploadScript("u"); await e.client.play(0);
+  await new Promise(r => setTimeout(r, 5));
+
+  e.player.t = 0; e.tick();
+  // real time passes, while the playhead advances normally
+  await new Promise(r => setTimeout(r, 1100));
+  const from = e.sent.length;
+  for (let t = 0.1; t <= 1.2; t += 0.1) { e.player.t = t; e.tick(); }
+
+  // Every frame after the wait, not just the last: the snap landed on the first
+  // tick after the idle and the ones behind it were clean, so reading the last
+  // frame reported success while the bug was still there.
+  const after = e.sent.slice(from).filter((m) => m.action === "axes");
+  ok("no frame after idling for over a second snaps",
+     after.length > 0 && after.every((m) => lead(m.roll) > 0),
+     after.map((m) => m.roll));
+}
+
 // ---- frame coverage ------------------------------------------------------
 console.log("\nframe coverage");
 {
