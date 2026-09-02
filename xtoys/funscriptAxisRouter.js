@@ -10,6 +10,39 @@
  *   3. Type a funscript channel name into each. The Channels Control lists
  *      what the current scene actually carries.
  *
+ * The Controls, and what each is for:
+ *
+ *   Output N channel (out1..out8)
+ *     One funscript channel name each. Load a scene first and read
+ *     "Channels (reported)" - it lists what that scene actually carries, so
+ *     the names can be copied rather than guessed. Output 1..8 drive the toys
+ *     in TOYS order; a blank field leaves that output alone. These eight are
+ *     the only Controls remembered after the Script stops, via
+ *     persistentVariables in the manifest.
+ *
+ *     A single-axis funscript has no channel name in the file, so it arrives
+ *     as MAIN. Every other name is verbatim from the funscript.
+ *
+ *   Scene, Elapsed, Rate, State, Channels (reported)
+ *     Display only. They are text inputs because XToys has no read-only
+ *     Control, so they can be typed into, but the next status message
+ *     overwrites that within about a second. They clear when stash stops
+ *     sending - State reads "disconnected" - rather than sitting there
+ *     implying something is still playing.
+ *
+ *   Play, Pause, Rewind, Forward, Seek %, Speed
+ *     Drive the stash player. Rewind and Forward jump by skipSeconds; Speed
+ *     is playback rate, where 43% is 1x. All of these need "Script can send
+ *     outbound messages" ticked on the webhook connection - without it the
+ *     console still logs the press and nothing reaches stash. This is the one
+ *     part that has never been confirmed working against a real setup.
+ *
+ *   rampMs, watchdogMs, skipSeconds (advanced)
+ *     rampMs is how long a toy takes to reach each new value - raise it if
+ *     the motion is steppy, lower it if it lags. watchdogMs is the deadman
+ *     switch: nothing from stash for that long and every output drops to
+ *     zero. skipSeconds is the Rewind/Forward jump.
+ *
  * ES5 only. JS-Interpreter is not a full ES5 engine: no let/const, no arrow
  * functions, no template literals, no anonymous nested functions, no DOM.
  */
@@ -28,7 +61,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "b4720726";             /* content hash, stamped by stamp.mjs */
+var BUILD = "cadaace8";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
