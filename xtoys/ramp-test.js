@@ -18,6 +18,15 @@
 
 var TOY = "generic-1-a";    /* the output to drive - must exist in your script */
 var FEED_WATCHDOG = true;   /* the Watchdog Job zeroes outputs; keep it quiet */
+var ONLY_RETARGET = true;   /* just the question that matters, slowly */
+
+/* Phase B was two seconds long and wedged between three other phases, which
+ * made the one observation this probe exists for the hardest to catch. Slowed
+ * right down and given the script to itself: 8s up, retarget at the halfway
+ * point, 6s to play out. With ONLY_RETARGET off you get the original run. */
+var UP_S = 8;
+var TURN_AT = 4000;
+var DOWN_S = 6;
 
 var t0 = Date.now();
 var burstStart = 0;
@@ -126,6 +135,27 @@ function finish() {
   console.log("Report it back before anything is built on ramps.");
 }
 
+/* --------------------------------------------------------------- retarget only */
+
+function slowUp() {
+  say("NOW: opening to 100 over " + UP_S + "s. Just watch it move.");
+  ramp(100, UP_S);
+}
+
+function slowTurn() {
+  say("NOW: it should be about HALF. Asking for 0 over " + DOWN_S + "s.");
+  say("  Does it turn round from where it is, or keep opening first?");
+  ramp(0, DOWN_S);
+}
+
+function slowDone() {
+  console.log("--- retarget probe ---");
+  console.log("turned round from about half     -> RETARGETS");
+  console.log("kept opening to full, then shut  -> QUEUES");
+  console.log("jumped, then moved               -> SNAPS");
+  console.log("(set ONLY_RETARGET = false for the rampTime and cost phases)");
+}
+
 /* ---------------------------------------------------------------- sequencing */
 
 setInterval(feedWatchdog, 400);
@@ -133,10 +163,16 @@ setInterval(feedWatchdog, 400);
 feedWatchdog();
 ramp(0, 0.1);
 
-say("ramp probe on '" + TOY + "'. Watch the toy, not the console.");
-
-setTimeout(phaseA, 1000);
-setTimeout(phaseB, 3500);
-setTimeout(phaseC, 7000);
-setTimeout(phaseD, 9500);
-setTimeout(finish, 11000);
+if (ONLY_RETARGET) {
+  say("retarget probe on '" + TOY + "'. Watch the toy for the next 15s.");
+  setTimeout(slowUp, 2000);
+  setTimeout(slowTurn, 2000 + TURN_AT);
+  setTimeout(slowDone, 2000 + TURN_AT + (DOWN_S * 1000) + 1000);
+} else {
+  say("ramp probe on '" + TOY + "'. Watch the toy, not the console.");
+  setTimeout(phaseA, 1000);
+  setTimeout(phaseB, 3500);
+  setTimeout(phaseC, 7000);
+  setTimeout(phaseD, 9500);
+  setTimeout(finish, 11000);
+}
