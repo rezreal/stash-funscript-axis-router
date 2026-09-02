@@ -678,8 +678,12 @@
         .then(function (r) {
           var sc = r && r.data && r.data.findScene;
           if (!sc) return;
+          // Same fallback stash itself displays: the title if one is set,
+          // otherwise the file name. The scene fragment carries the full
+          // `path` and no basename, so cut the directories off here.
           var file = sc.files && sc.files[0];
-          self.title = sc.title || (file && file.basename) || "Scene " + id;
+          var name = file && file.path ? String(file.path).replace(/^.*[\\/]/, "") : "";
+          self.title = sc.title || name || "Scene " + id;
           // republish straight away rather than leaving the title blank on
           // screen until the next status tick
           self.publish();

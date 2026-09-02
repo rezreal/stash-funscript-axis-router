@@ -24,7 +24,8 @@ function chans(frame) {
 }
 
 // ---- harness -------------------------------------------------------------
-function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
+function makeEnv(funscript, pluginSettings, ifaceSettings, handy, scene) {
+  const findScene = scene === undefined ? { title: "My Scene" } : scene;
   const sent = [];
   const calls = [];
   const player = {
@@ -68,7 +69,7 @@ function makeEnv(funscript, pluginSettings, ifaceSettings, handy) {
       PluginApi: {
         utils: {
           InteractiveUtils,
-          StashService: { getClient: () => ({ query: async () => ({ data: { findScene: { title: "My Scene" } } }) }) },
+          StashService: { getClient: () => ({ query: async () => ({ data: { findScene } }) }) },
         },
         GQL: { FindSceneDocument: {} },
       },
@@ -646,6 +647,32 @@ console.log("\nplayer status");
   eq("paused reported", st.playing, "0");
   eq("title resolved over graphql", st.title, "My Scene");
   eq("routed channels listed, in file order", st.channels, "MAIN,roll,pitch");
+}
+{
+  // stash shows the file name for a scene with no title, and the scene
+  // fragment carries a full path rather than a basename
+  const e = makeEnv(V2, { xtoysWebhookId: "abc" },
+    undefined, false, { title: "", files: [{ path: "/mnt/media/clips/A Nice Clip.mp4" }] });
+  await e.client.uploadScript("http://x/scene/3977/funscript");
+  await new Promise(r => setTimeout(r, 20));
+  const st = e.sent.filter(m => m.action === "status").pop();
+  eq("untitled scene falls back to the file name", st.title, "A Nice Clip.mp4");
+}
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc" },
+    undefined, false, { title: "", files: [{ path: "C:\\media\\clips\\Windows Clip.mp4" }] });
+  await e.client.uploadScript("http://x/scene/3977/funscript");
+  await new Promise(r => setTimeout(r, 20));
+  const st = e.sent.filter(m => m.action === "status").pop();
+  eq("windows paths split too", st.title, "Windows Clip.mp4");
+}
+{
+  const e = makeEnv(V2, { xtoysWebhookId: "abc" },
+    undefined, false, { title: "", files: [] });
+  await e.client.uploadScript("http://x/scene/3977/funscript");
+  await new Promise(r => setTimeout(r, 20));
+  const st = e.sent.filter(m => m.action === "status").pop();
+  eq("scene id is the last resort", st.title, "Scene 3977");
 }
 
 // ---- 25. remote control --------------------------------------------------
