@@ -82,7 +82,7 @@ works as it is, so this is a note rather than a plan.
 
 ## Inverting an output
 
-Each output has an **Output N invert** Control. Ticked, the funscript's 0 drives
+Each output has an **Output N invert** Control. Set, the funscript's 0 drives
 that toy to 100 and back — for an axis whose neutral runs the other way, or a
 toy mounted the opposite way round.
 
@@ -94,14 +94,24 @@ It does not flip the zero driven on pause or by the Watchdog. That is a safety
 floor rather than a position, and flipping it would turn a stop into a toy at
 full.
 
-> **The Control type is a guess.** `inv1`..`inv8` are declared as
-> `"type": "toggle"`, which matches the Toggle in XToys' documented Control set,
-> but the exact string a Script Export uses has not been confirmed against a
-> real one — only `input`, `push` and `slider` have. If the toggles do not
-> appear after loading the script, change `"toggle"` to `"input"` in
-> `xtoys-script.json` and type `1` in the box: the script reads the variable
-> leniently, so anything that is not empty, `0`, `false`, `off` or `no` counts
-> as inverted, and both Control types work unchanged.
+> **These are text inputs, not checkboxes, and that is not for want of trying.**
+> Type `1` to invert, blank or `0` to leave it alone.
+>
+> XToys does have a Toggle button — the [Controls
+> docs](https://guide.xtoys.app/script-creation/definitions.html) list it — but
+> **no page documents the `type` string a Script Export uses for any Control**,
+> and `"toggle"` is not it: XToys drops a Control whose type it does not
+> recognise, silently, so all eight vanished while the other twenty-two loaded.
+> The three strings known here — `input`, `push`, `slider` — all came from
+> reading a real export. The app bundle is no help: it is obfuscated with
+> rotated string arrays, and the Controls editor is a lazily-loaded chunk behind
+> a login, so none of the type strings appear in anything publicly served.
+>
+> To upgrade these to real checkboxes, add one Toggle Control by hand in the
+> XToys editor, export the Script, and read the `type` it wrote. Put that string
+> in place of `input` for `inv1`..`inv8` and nothing else has to change — the
+> script reads the variable leniently, so anything that is not empty, `0`,
+> `false`, `off` or `no` counts as inverted, whichever Control holds it.
 
 ## The channel mapping survives a restart
 

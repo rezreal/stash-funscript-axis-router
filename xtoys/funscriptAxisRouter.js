@@ -73,7 +73,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c,generic-1-d,generic-1-e,generic-1-f,generic-1-g,generic-1-h";
 
-var BUILD = "ffe0960c";             /* content hash, stamped by stamp.mjs */
+var BUILD = "f914d699";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* what the plugin sends on axis updates */
 var RAMP_MS = 100;          /* floor for a point dispatched with no time left */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
