@@ -28,7 +28,7 @@
 var WEBHOOK = "webhook-a";
 var TOYS = "generic-1-a,generic-1-b,generic-1-c";
 
-var BUILD = "65440561";             /* content hash, stamped by stamp.mjs */
+var BUILD = "478fbbc7";             /* content hash, stamped by stamp.mjs */
 var ACTION = "axes";        /* must match the plugin's Action Name setting */
 var RAMP_MS = 100;          /* fallback when the rampMs Control is empty */
 var SKIP_SECONDS = 30;      /* fallback when the skipSeconds Control is empty */
@@ -182,11 +182,18 @@ function onStatus(data) {
   setUiVariable("videoDuration", data["trigger-duration"] || "0");
   setUiVariable("videoPercent", dur > 0 ? Math.round((pos / dur) * 100) : 0);
 
+  /* Written on every status message, like the four fields above, rather than
+   * only when the list changes. The Watchdog Job blanks this Control when stash
+   * stops sending, and a reconnect on the same scene reports the same list - so
+   * a write-on-change never fired again and it stayed empty for good. The other
+   * reported fields always rewrite, which is why they recovered and this did
+   * not. Change detection below is still what drives the log and the zeroing. */
   var chans = data["trigger-channels"] || "";
+  setUiVariable("Channels", chans);
+
   if (chans !== lastChannels) {
     var previous = lastChannels;
     lastChannels = chans;
-    setUiVariable("Channels", chans);
     console.log("channels in this scene: " + (chans === "" ? "(none)" : chans));
 
     /* Zero anything the new scene cannot drive, rather than leaving it stuck at
